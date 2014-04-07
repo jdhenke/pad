@@ -72,13 +72,8 @@
       // creates diff from a -> b
       function getDiff(a, b) {
 
-        var cost = function(type, previousOps) {
-          var cost = 1;
-          if (previousOps.length > 0) {
-            if (previousOps[previousOps.length - 1].type != type) {
-              cost += 3;
-            }
-          }
+        var cost = function(ops) {
+          var cost = ops.length;
           return cost;
         }
 
@@ -101,51 +96,46 @@
           } else if (i == 0) {
             // remaining part of b must be inserted at beginning then
             result = dp(i, j-1);
-            result.cost += cost("Insert", result.ops);
             result.ops.push({
               type: "Insert",
               index: 0,
               val: b[j-1],
             });
+            result.cost = cost(result.ops);
             answer = result;
           } else if (j == 0) {
             // remaining part of a must be deleted
             result = dp(i-1, j);
-            result.cost += cost("Delete", result.ops);
             result.ops.push({
               type: "Delete",
               index: i-1,
             });
+            result.cost = cost(result.ops);
             answer = result;
           } else {
-            // characters left in both versions
-            if (a[i-1] == b[j-1]) {
-              // they are the same, no cost and no operations needed
-              answer = dp(i-1, j-1);
+            var insertResult = dp(i, j-1);
+            insertResult.ops.push({
+              type: "Insert",
+              index: i,
+              val: b[j-1],
+            });
+            insertResult.cost = cost(insertResult.ops);
+
+            var deleteResult = dp(i-1, j);
+            deleteResult.ops.push({
+              type: "Delete",
+              index: i - 1,
+            });
+            deleteResult.cost = cost(deleteResult.ops);
+
+            if (insertResult.cost <= deleteResult.cost) {
+              answer = insertResult;
             } else {
+              answer = deleteResult;
+            }
 
-              // they are different, so can either insert or delete
-
-              var insertResult = dp(i, j-1);
-              insertResult.cost += cost("Insert", insertResult.ops);
-              insertResult.ops.push({
-                type: "Insert",
-                index: i,
-                val: b[j-1],
-              });
-
-              var deleteResult = dp(i-1, j);
-              deleteResult.cost += cost("Delete", deleteResult.ops);
-              deleteResult.ops.push({
-                type: "Delete",
-                index: i - 1,
-              });
-
-              if (insertResult.cost <= deleteResult.cost) {
-                answer = insertResult;
-              } else {
-                answer = deleteResult;
-              }
+            if (a[i-1] == b[j-1] && dp(i-1,j-1).cost < answer.cost) {
+              answer = dp(i-1, j-1);
             }
           }
 
@@ -320,7 +310,7 @@
             }
           }
         }
-        for ( ; j < d2.length; j += 1) {
+        while (j < d2.length) {
           if (d2[j].type == "Insert") {
             doNewInsert();
           } else if (d2[j].type == "Delete") {
