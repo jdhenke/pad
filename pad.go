@@ -44,9 +44,9 @@ func NewDoc() *Doc {
 func (doc *Doc) getDiff(id int) chan Diff {
 	doc.mu.Lock()
 	defer doc.mu.Unlock()
-	c := make(chan Diff)
+	c := make(chan Diff, 1)
 	if (id < len(doc.diffs)) {
-		go func() {c <- doc.diffs[id]}()
+		c <- doc.diffs[id]
 	} else {
 		doc.listeners = append(doc.listeners, c)
 	}
