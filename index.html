@@ -52,7 +52,7 @@
             commitAndPush();
           },
           error: function(e) {
-            console.log("commit", e.responseText);
+            console.log("Error in diffs/put", e.responseText);
           }
         });
       }
@@ -102,10 +102,20 @@
           // changes we've made since the latest commit.
           $("#pad").attr("disabled", "disabled");
           var currentContent = $("#pad").val();
+          var cursorStart = $("#pad")[0].selectionStart;
+          var cursorEnd = $("#pad")[0].selectionEnd;
+          currentContent = currentContent.substring(0, cursorStart) + "\x00" +
+                           currentContent.substring(cursorStart, cursorEnd) +
+                           "\x00" + currentContent.substring(cursorEnd);
           var localDiff = getDiff(oldHeadContent, currentContent);
           var newLocalDiff = rebase(newDiff, localDiff);
           var newContent = applyDiff(newHeadContent, newLocalDiff);
+          var newCursorStart = newContent.indexOf("\x00");
+          var newCursorEnd = newContent.lastIndexOf("\x00") - 1;
+          newContent = newContent.replace("\x00", "");
+          newContent = newContent.replace("\x00", "");
           $("#pad").val(newContent);
+          $("#pad")[0].setSelectionRange(newCursorStart, newCursorEnd);
           // unlock UI
           $("#pad").removeAttr("disabled");
         }
@@ -262,7 +272,22 @@
           // we want to modify partially overlapping deletes
           while (j < d2.length && d2[j].index < d1[i].index + d1[i].size) {
             if (d2[j].type == "Insert") {
-              // ignore it
+              // ignore it. account for cursor positions marked with null char.
+              var cursorIndex1 = d2[j].val.indexOf("\x00");
+              var cursorIndex2 = d2[j].val.lastIndexOf("\x00");
+              var insertCursor = function() {
+                output.push({
+                  type: "Insert",
+                  index: d1[i].index + shift,
+                  val: "\x00",
+                });
+              };
+              if (cursorIndex1 >= 0) {
+                insertCursor();
+              }
+              if (cursorIndex2 > cursorIndex1) {
+                insertCursor();
+              }
             } else if (d2[j].type == "Delete") {
               if (d2[j].index + d2[j].size > d1[i].index + d1[i].size) {
                 // delete has mismatched overlap

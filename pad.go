@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 )
 
 var _ = fmt.Printf
+var _ = time.Sleep
 
 type PadServer struct {
 	docs map[string]*Doc
