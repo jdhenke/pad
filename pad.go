@@ -1,6 +1,7 @@
 package main
 
 import (
+	"code.google.com/p/go.net/websocket"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -17,6 +18,8 @@ type PadServer struct {
 
 type Doc struct {
 	diffs []Diff
+	mu sync.Mutex
+	listeners []chan Diff
 }
 
 type Diff string
@@ -29,6 +32,37 @@ func MakePadServer() *PadServer {
 	return ps
 }
 
+// DOC
+
+func NewDoc() *Doc {
+	doc := &Doc{}
+	doc.diffs = make([]Diff, 1)
+	doc.listeners = make([]chan Diff, 0)
+	return doc
+}
+
+func (doc *Doc) getDiff(id int) chan Diff {
+	doc.mu.Lock()
+	defer doc.mu.Unlock()
+	c := make(chan Diff)
+	if (id < len(doc.diffs)) {
+		go func() {c <- doc.diffs[id]}()
+	} else {
+		doc.listeners = append(doc.listeners, c)
+	}
+	return c
+}
+
+func (doc *Doc) putDiff(diff Diff) {
+	doc.mu.Lock()
+	defer doc.mu.Unlock()
+	for _, c := range doc.listeners {
+		c <- diff
+	}
+	doc.listeners = make([]chan Diff, 0)
+	doc.diffs = append(doc.diffs, diff)
+}
+
 // HANDLERS
 
 func (ps *PadServer) diffPutter(w http.ResponseWriter, r *http.Request) {
@@ -36,26 +70,38 @@ func (ps *PadServer) diffPutter(w http.ResponseWriter, r *http.Request) {
 	defer ps.mu.Unlock()
 	docID := r.PostFormValue("doc-id")
 	diff := Diff(r.PostFormValue("diff"))
-	doc, ok := ps.docs[docID];
+	doc, ok := ps.docs[docID]
 	if !ok {
-		ps.docs[docID] = &Doc{diffs: make([]Diff, 1)}
+		ps.docs[docID] = NewDoc()
 		doc = ps.docs[docID]
 	}
-	doc.diffs = append(doc.diffs, diff)
+	doc.putDiff(diff)
 }
 
-func (ps *PadServer) diffGetter(w http.ResponseWriter, r *http.Request) {
+func (ps *PadServer) diffGetter(ws *websocket.Conn) {
+	var docID string
+	websocket.Message.Receive(ws, &docID)
+	var msg string
+	websocket.Message.Receive(ws, &msg)
+	nextDiff, _ := strconv.Atoi(msg)
+
 	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	docID := r.PostFormValue("doc-id")
-	diffID, _ := strconv.Atoi(r.PostFormValue("diff-id"))
-	if doc, ok := ps.docs[docID]; ok {
-		if diffID < len(doc.diffs) {
-			w.Write([]byte(doc.diffs[diffID]))
+	doc, ok := ps.docs[docID]
+	if !ok {
+		ps.docs[docID] = NewDoc()
+		doc = ps.docs[docID]
+	}
+	ps.mu.Unlock()
+
+	for {
+		c := doc.getDiff(nextDiff)
+		diff := <- c
+		err := websocket.Message.Send(ws, string(diff))
+		if err != nil {
 			return
 		}
+		nextDiff += 1
 	}
-	http.Error(w, "bad get", http.StatusBadRequest)
 }
 
 func (ps *PadServer) docHandler(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +115,7 @@ func (ps *PadServer) docHandler(w http.ResponseWriter, r *http.Request) {
 
 func (ps *PadServer) Start() {
 	http.HandleFunc("/diffs/put", ps.diffPutter)
-	http.HandleFunc("/diffs/get", ps.diffGetter)
+	http.Handle("/diffs/get", websocket.Handler(ps.diffGetter))
 	http.HandleFunc("/docs/", ps.docHandler)
 	http.ListenAndServe(":8080", nil)
 }
