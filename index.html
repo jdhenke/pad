@@ -54,27 +54,6 @@
         });
       }
 
-      // merges in the next change from the server
-      function doUpdate() {
-        $.ajax({
-          url: "/diffs/get",
-          data: {
-            "doc-id": window.location.pathname,
-            "diff-id": head() + 1,
-          },
-          type: "PUT",
-          success: function(resp) {
-            var commit = JSON.parse(resp);
-            applyCommit(commit);
-            $("#btnCommit").removeAttr("disabled");
-            doUpdate();
-          },
-          error: function(e) {
-            console.log(e.responseText);
-          },
-        });
-      }
-
       // creates diff from a -> b
       function getDiff(a, b) {
 
