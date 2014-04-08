@@ -355,7 +355,11 @@
       }
 
       function initSocket() {
-        var conn = new WebSocket("ws://localhost:8080/diffs/get");
+        var addr = "ws://";
+        addr += window.location.hostname;
+        addr += ":" + window.location.port
+        addr += "/diffs/get";
+        var conn = new WebSocket(addr);
         conn.onopen = function() {
           conn.send(document.location.pathname);
           conn.send(head() + 1);
