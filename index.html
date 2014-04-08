@@ -21,8 +21,10 @@
         pending: false,
       };
 
+      // Functions Which Affect State/UI
+
       // creates commit of local changes since last commit, sends to server
-      function doCommit() {
+      function commitAndPush() {
         if (window.state.pending) {
           return;
         };
@@ -47,12 +49,70 @@
           },
           type: "PUT",
           success: function(resp) {
+            commitAndPush();
           },
           error: function(e) {
             console.log("commit", e.responseText);
           }
         });
       }
+
+      // continuously tries to establish connection and apply served updates
+      function startContinuousPull() {
+        var addr = "ws://";
+        addr += window.location.hostname;
+        addr += ":" + window.location.port
+        addr += "/diffs/get";
+        var conn = new WebSocket(addr);
+        conn.onopen = function() {
+          conn.send(document.location.pathname);
+          conn.send(head() + 1);
+        }
+        conn.onclose = function(evt) {
+            startContinuousPull();
+        }
+        conn.onmessage = function(evt) {
+            var commit = JSON.parse(evt.data);
+            merge(commit);
+        }
+      }
+
+      // applies commit sent by server to the local state, updating UI also.
+      function merge(commit) {
+        // make this diff relevant for the current HEAD
+        var newDiff = commit.diff;
+        for (var i = commit.parent + 1; i <= head(); i += 1) {
+          newDiff = rebase(window.state.commits[i].diff, newDiff);
+        };
+        var newCommit = {
+          parent: head(),
+          diff: newDiff,
+        };
+        window.state.commits.push(newCommit);
+        var oldHeadContent = window.state.headContent;
+        var newHeadContent = applyDiff(window.state.headContent, newDiff);
+
+        // check origin of commit
+        if (commit.clientID == window.state.clientID) {
+          // this is our outstanding commit, so we can actually ignore it! it is
+          // accounted for in the live text!
+          window.state.pending = false;
+        } else {
+          // this is an intermediate commit, so we need to rebase all the live
+          // changes we've made since the latest commit.
+          $("#pad").attr("disabled", "disabled");
+          var currentContent = $("#pad").val();
+          var localDiff = getDiff(oldHeadContent, currentContent);
+          var newLocalDiff = rebase(newDiff, localDiff);
+          var newContent = applyDiff(newHeadContent, newLocalDiff);
+          $("#pad").val(newContent);
+          // unlock UI
+          $("#pad").removeAttr("disabled");
+        }
+        window.state.headContent = newHeadContent;
+      }
+
+      // Git Utility Functions
 
       // creates diff from a -> b
       function getDiff(a, b) {
@@ -162,45 +222,28 @@
         return diff;
       }
 
-      // applies commit sent by server to the local state, updating UI also.
-      function applyCommit(commit) {
-        // make this diff relevant for the current HEAD
-        var newDiff = commit.diff;
-        for (var i = commit.parent + 1; i <= head(); i += 1) {
-          newDiff = rebase(window.state.commits[i].diff, newDiff);
-        };
-        var newCommit = {
-          parent: head(),
-          diff: newDiff,
-        };
-        window.state.commits.push(newCommit);
-        var oldHeadContent = window.state.headContent;
-        var newHeadContent = applyDiff(window.state.headContent, newDiff);
-
-        // check origin of commit
-        if (commit.clientID == window.state.clientID) {
-          // this is our outstanding commit, so we can actually ignore it! it is
-          // accounted for in the live text!
-          window.state.pending = false;
-        } else {
-          // this is an intermediate commit, so we need to rebase all the live
-          // changes we've made since the latest commit.
-          $("#pad").attr("disabled", "disabled");
-          var currentContent = $("#pad").val();
-          var localDiff = getDiff(oldHeadContent, currentContent);
-          var newLocalDiff = rebase(newDiff, localDiff);
-          var newContent = applyDiff(newHeadContent, newLocalDiff);
-          $("#pad").val(newContent);
-          // unlock UI
-          $("#pad").removeAttr("disabled");
+      // returns the result of applying diff to content
+      function applyDiff(content, diff) {
+        var index = 0;
+        var output = "";
+        for (var i = 0; i < diff.length; i += 1) {
+          var op = diff[i];
+          output += content.substring(index, op.index);
+          index = op.index
+          if (op.type == "Insert") {
+            output += op.val;
+          } else if (op.type == "Delete") {
+            index += op.size;
+          }
         }
-        window.state.headContent = newHeadContent;
+        output += content.substring(index, content.length);
+        return output;
       }
 
       // given two diffs to the same document, return a diff2' which captures as
       // many of the changes in diff2 as possible and can be applied to the
       // document + diff1.
-      var rebase = function(d1, d2) {
+      function rebase(d1, d2) {
 
         // cumulative state as we iterate through with two fingers
         var i = 0;
@@ -305,57 +348,23 @@
         return output;
       }
 
-      // returns the result of applying diff to content
-      var applyDiff = function(content, diff) {
-        var index = 0;
-        var output = "";
-        for (var i = 0; i < diff.length; i += 1) {
-          var op = diff[i];
-          output += content.substring(index, op.index);
-          index = op.index
-          if (op.type == "Insert") {
-            output += op.val;
-          } else if (op.type == "Delete") {
-            index += op.size;
-          }
-        }
-        output += content.substring(index, content.length);
-        return output;
-      }
-
       // get index in window.state.commits of latest commit
       function head() {
         return window.state.commits.length - 1;
       };
+
+      // Utility Functions
 
       // returns a copy of a simple javascript object
       function copy(x) {
         return JSON.parse(JSON.stringify(x));
       }
 
-      function initSocket() {
-        var addr = "ws://";
-        addr += window.location.hostname;
-        addr += ":" + window.location.port
-        addr += "/diffs/get";
-        var conn = new WebSocket(addr);
-        conn.onopen = function() {
-          conn.send(document.location.pathname);
-          conn.send(head() + 1);
-        }
-        conn.onclose = function(evt) {
-            initSocket();
-        }
-        conn.onmessage = function(evt) {
-            var commit = JSON.parse(evt.data);
-            applyCommit(commit);
-        }
-      }
-
       // register periodic syncing
       $(function() {
-        $("#pad").keyup(doCommit);
-        initSocket();
+        $("#pad").keyup(commitAndPush);
+        setInterval(commitAndPush, 1000);
+        startContinuousPull();
         $("#pad").focus();
       });
 
