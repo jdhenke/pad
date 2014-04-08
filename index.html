@@ -91,12 +91,14 @@
         window.state.commits.push(newCommit);
         var oldHeadContent = window.state.headContent;
         var newHeadContent = applyDiff(window.state.headContent, newDiff);
+        window.state.headContent = newHeadContent;
 
         // check origin of commit
         if (commit.clientID == window.state.clientID) {
           // this is our outstanding commit, so we can actually ignore it! it is
           // accounted for in the live text!
           window.state.pending = false;
+          commitAndPush();
         } else {
           // this is an intermediate commit, so we need to rebase all the live
           // changes we've made since the latest commit.
@@ -119,7 +121,6 @@
           // unlock UI
           $("#pad").removeAttr("disabled");
         }
-        window.state.headContent = newHeadContent;
       }
 
       // Git Utility Functions
@@ -127,90 +128,82 @@
       // creates diff from a -> b
       function getDiff(a, b) {
 
-        var cost = function(ops) {
-          var cost = ops.length;
-          return cost;
-        }
-
         // perform dynamic program to create diff
-        var memo = {}
-        // dp(i,j) returns the cost and specific operations to transform
-        // a[:i] into b[:j]
+        var memo = {};
+
+        // dp(i,j) returns operations to transform a[:i] into b[:j]. we return
+        // the actual stored object; do not modify it.
         var dp = function(i, j) {
+
           // check if answer is memoized; if so return it
           var key = i + "," + j;
           if (key in memo) {
-            return copy(memo[key])
+            return memo[key];
           }
 
           // if not compute, store and return it
           var answer;
           if (i == 0 && j == 0) {
             // both documents finished together
-            answer = {cost: 0, ops: []};
-          } else if (i == 0) {
-            // remaining part of b must be inserted at beginning then
-            result = dp(i, j-1);
-            result.ops.push({
-              type: "Insert",
-              index: 0,
-              val: b[j-1],
-            });
-            result.cost = cost(result.ops);
-            answer = result;
-          } else if (j == 0) {
-            // remaining part of a must be deleted
-            result = dp(i-1, j);
-            result.ops.push({
-              type: "Delete",
-              index: i-1,
-            });
-            result.cost = cost(result.ops);
-            answer = result;
+            answer = {type: null, cost: 0};
           } else {
-            var insertResult = dp(i, j-1);
-            insertResult.ops.push({
-              type: "Insert",
-              index: i,
-              val: b[j-1],
-            });
-            insertResult.cost = cost(insertResult.ops);
-
-            var deleteResult = dp(i-1, j);
-            deleteResult.ops.push({
-              type: "Delete",
-              index: i - 1,
-            });
-            deleteResult.cost = cost(deleteResult.ops);
-
-            if (insertResult.cost <= deleteResult.cost) {
-              answer = insertResult;
-            } else {
-              answer = deleteResult;
+            var options = [];
+            if (j > 0) {
+              var insertResult = dp(i, j-1);
+              options.push({
+                type: "Insert",
+                index: i,
+                val: b[j-1],
+                cost: insertResult.cost + 1,
+                last: insertResult,
+              });
+            }
+            if (i > 0) {
+              var deleteResult = dp(i-1, j);
+              options.push({
+                type: "Delete",
+                index: i - 1,
+                size: 1,
+                cost: deleteResult.cost + 1,
+                last: deleteResult,
+              });
+            }
+            if (a[i-1] == b[j-1]) {
+              var sameResult = dp(i-1, j-1);
+              options.push(sameResult);
             }
 
-            if (a[i-1] == b[j-1] && dp(i-1,j-1).cost < answer.cost) {
-              answer = dp(i-1, j-1);
+            var minOp = options[0];
+            for (var k=1; k < options.length; k += 1) {
+              if (options[k].cost < minOp.cost) {
+                minOp = options[k];
+              }
             }
+            answer = minOp;
           }
 
-
-          memo[key] = answer
-          return copy(answer)
+          memo[key] = answer;
+          return answer;
         }
 
-        var ops = dp(a.length, b.length).ops;
+        var result = dp(a.length, b.length);
+        var ops = [];
+        while (result.type != null) {
+          var nextResult = result.last;
+          delete result.cost;
+          delete result.last;
+          ops.push(result);
+          result = nextResult;
+        }
+        ops = ops.reverse();
+
 
         // collapse adjacent
         if (ops.length == 0) {
           return []
         }
         var diff = [];
-        var runningOp = copy(ops[0]);
-        if (runningOp.type == "Delete") {
-          runningOp.size = 1;
-        }
-
+        var runningOp = ops[0];
         for (var i = 1; i < ops.length; i += 1) {
           if (runningOp.type == "Insert" &&
               ops[i].type == "Insert" &&
@@ -222,10 +215,7 @@
             runningOp.size += 1;
           } else {
             diff.push(runningOp);
-            runningOp = copy(ops[i]);
-            if (runningOp.type == "Delete") {
-              runningOp.size = 1;
-            }
+            runningOp = ops[i];
           }
         }
         diff.push(runningOp);
@@ -250,9 +240,9 @@
         return output;
       }
 
-      // given two diffs to the same document, return a diff2' which captures as
-      // many of the changes in diff2 as possible and can be applied to the
-      // document + diff1.
+      // given two diffs to the same document, return a d2' which captures as
+      // many of the changes in d2 as possible and can be applied to the
+      // document + d1. mutates d2.
       function rebase(d1, d2) {
 
         // cumulative state as we iterate through with two fingers
@@ -294,7 +284,7 @@
                 // OLD: --[--]--
                 // NEW: ---[--]-
                 //    : --[-]-
-                var op = copy(d2[j]);
+                var op = d2[j];
                 op.index = d1[i].index + shift;
                 op.size = d2[j].index + d2[j].size - d1[i].index + d1[i].size;
                 output.push(op);
@@ -308,7 +298,7 @@
           i += 1;
         }
         var doNewInsert = function() {
-          var op = copy(d2[j]);
+          var op = d2[j];
           op.index += shift;
           output.push(op);
           j += 1;
@@ -317,7 +307,7 @@
           // we want to adjust this delete's starting index appropriately. we
           // also want to adjust this delete's size based on any ops this delete
           // strictly contains.
-          var op = copy(d2[j]);
+          var op = d2[j];
           op.index += shift;
           var originalSize = op.size;
           while (i < d1.size && d1[i].index < op.index + originalSize) {
@@ -378,17 +368,11 @@
         return window.state.commits.length - 1;
       };
 
-      // Utility Functions
+      // LISTENERS
 
-      // returns a copy of a simple javascript object
-      function copy(x) {
-        return JSON.parse(JSON.stringify(x));
-      }
-
-      // register periodic syncing
+      // on page load, hook everything up
       $(function() {
         $("#pad").keyup(commitAndPush);
-        setInterval(commitAndPush, 1000);
         startContinuousPull();
         $("#pad").focus();
       });
