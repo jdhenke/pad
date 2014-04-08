@@ -41,12 +41,15 @@
         $("#btnCommit").attr("disabled", "disabled");
         $.ajax({
           url: "/diffs/put",
-          data: JSON.stringify(commit),
+          data: {
+            "doc-id": window.location.pathname,
+            "diff": JSON.stringify(commit),
+          },
           type: "PUT",
           success: function(resp) {
           },
           error: function(e) {
-            console.log(e.responseText);
+            console.log("commit", e.responseText);
           }
         });
       }
@@ -55,7 +58,10 @@
       function doUpdate() {
         $.ajax({
           url: "/diffs/get",
-          data: "" + (head() + 1),
+          data: {
+            "doc-id": window.location.pathname,
+            "diff-id": head() + 1,
+          },
           type: "PUT",
           success: function(resp) {
             var commit = JSON.parse(resp);

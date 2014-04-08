@@ -8,60 +8,54 @@ import (
 	"sync"
 )
 
+var _ = fmt.Printf
+
 type PadServer struct {
-	diffs []Diff
-	mu    sync.Mutex
+	docs map[string]*Doc
+	mu   sync.Mutex
 }
 
-// going to start with all processing done on the client side. this is going to
-// be stringified javascript to start. actually, probably just going to be the
-// document.
-type Diff []byte
+type Doc struct {
+	diffs []Diff
+}
+
+type Diff string
+
+// PAD SERVER
 
 func MakePadServer() *PadServer {
 	ps := &PadServer{}
-	ps.diffs = make([]Diff, 1)
+	ps.docs = make(map[string]*Doc)
 	return ps
 }
+
+// HANDLERS
 
 func (ps *PadServer) diffPutter(w http.ResponseWriter, r *http.Request) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-
-	// body of request is going to be the diff
-	if diff, err := ioutil.ReadAll(r.Body); err == nil {
-		ps.diffs = append(ps.diffs, diff)
-	} else {
-		panic("unhandled error")
+	docID := r.PostFormValue("doc-id")
+	diff := Diff(r.PostFormValue("diff"))
+	doc, ok := ps.docs[docID];
+	if !ok {
+		ps.docs[docID] = &Doc{diffs: make([]Diff, 1)}
+		doc = ps.docs[docID]
 	}
+	doc.diffs = append(doc.diffs, diff)
 }
 
 func (ps *PadServer) diffGetter(w http.ResponseWriter, r *http.Request) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "couldn't parse body", http.StatusBadRequest)
-		return
-	}
-	fmt.Printf("serving %v\n", string(body))
-	if v, err := strconv.Atoi(string(body)); err == nil {
-		if v < 0 {
-			http.Error(
-				w,
-				fmt.Sprintf("version number %v < 0", v),
-				http.StatusBadRequest,
-			)
-		} else if v >= len(ps.diffs) {
-			http.Error(
-				w,
-				fmt.Sprintf("version number %v > max %v", v, len(ps.diffs) - 1),
-				http.StatusBadRequest,
-			)
-		} else {
-			w.Write(ps.diffs[v])
+	docID := r.PostFormValue("doc-id")
+	diffID, _ := strconv.Atoi(r.PostFormValue("diff-id"))
+	if doc, ok := ps.docs[docID]; ok {
+		if diffID < len(doc.diffs) {
+			w.Write([]byte(doc.diffs[diffID]))
+			return
 		}
 	}
+	http.Error(w, "bad get", http.StatusBadRequest)
 }
 
 func (ps *PadServer) docHandler(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +75,6 @@ func (ps *PadServer) Start() {
 }
 
 func main() {
-	ps := MakePadServer();
-	ps.Start();
+	ps := MakePadServer()
+	ps.Start()
 }
