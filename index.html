@@ -355,7 +355,6 @@
       }
 
       function initSocket() {
-        console.log("setting up sockets.")
         var conn = new WebSocket("ws://localhost:8080/diffs/get");
         conn.onopen = function() {
           conn.send(document.location.pathname);
@@ -366,7 +365,6 @@
         }
         conn.onmessage = function(evt) {
             var commit = JSON.parse(evt.data);
-            console.log(commit);
             applyCommit(commit);
         }
       }
