@@ -119,6 +119,7 @@ func (ps *PadServer) Start() {
 	http.HandleFunc("/diffs/put", ps.diffPutter)
 	http.Handle("/diffs/get", websocket.Handler(ps.diffGetter))
 	http.HandleFunc("/docs/", ps.docHandler)
+	http.Handle("/js/", http.FileServer(http.Dir("./")))
 	http.ListenAndServe(":8080", nil)
 }
 
