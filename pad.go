@@ -28,7 +28,7 @@ type Doc struct {
 	mu        sync.Mutex
 	listeners []chan Diff
 	Id        int64
-	Name      string
+	Name      string //TODO: Make a Doc metadata structure to store doc identification
 }
 
 type Diff string
@@ -59,7 +59,7 @@ func NewDoc(docID string) *Doc {
 	fd.Write(b)
 
 	// create doc file on disk
-	os.Create(DOC + strconv.FormatInt(doc.Id, 10) + TXT)
+	os.Create(DOC + strconv.FormatInt(doc.Id, 10) + JSON)
 
 	return doc
 }
@@ -107,8 +107,6 @@ func (ps *PadServer) diffGetter(ws *websocket.Conn) {
 	var msg string
 	websocket.Message.Receive(ws, &msg)
 	nextDiff, _ := strconv.Atoi(msg)
-
-	fmt.Printf("DocId: %s\n", docID)
 
 	ps.mu.Lock()
 	doc, ok := ps.docs[docID]

@@ -13,7 +13,7 @@ import (
 
 const (
 	DOC          = "./docs/"
-	TXT          = ".txt"
+	JSON         = ".json"
 	METADATA     = "metadata.json"
 	WAITINTERVAL = 5 * time.Second
 )
@@ -24,6 +24,15 @@ const (
 type PadPersistenceWorker struct {
 	ps *PadServer
 	// TODO: need access to the node server that handles doc creation
+}
+
+/*
+ * Representation of a Doc's data stored on disk. It includes the interpretted content
+ * of all the diffs encountered for the doc, and the diffs themselves
+ */
+type PersistentDocData struct {
+	Content string
+	Diffs   []Diff
 }
 
 /*
@@ -39,9 +48,24 @@ func MakePersistenceWorker(server *PadServer) *PadPersistenceWorker {
 		os.Mkdir("docs", os.ModePerm) // set to permissions 0777, this should change
 	}
 
-	ppd.loadFromMetaData()
+	ppd.loadAllDocs()
 
 	return &ppd
+}
+
+/*
+ * Loads an individual Doc's PersistentDocData stored on disk
+ */
+func (ppd *PadPersistenceWorker) loadDoc(doc *Doc) *PersistentDocData {
+	path := ppd.pathForDoc(doc)
+	// read whole the file
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	data := &PersistentDocData{}
+	json.Unmarshal(b, data)
+	return data
 }
 
 /*
@@ -49,16 +73,17 @@ func MakePersistenceWorker(server *PadServer) *PadPersistenceWorker {
  * stored as metadata and loads it into the server's state. If no metadata exists
  * this function sets up the environment to start using persistent state.
  */
-func (ppd *PadPersistenceWorker) loadFromMetaData() {
+func (ppd *PadPersistenceWorker) loadAllDocs() {
 	if ok, _ := exists(METADATA); ok {
 		metaDataFile, _ := os.Open(METADATA)
 		defer metaDataFile.Close()
 		r := bufio.NewReader(metaDataFile)
-		for line, _, err := r.ReadLine(); err != io.EOF; {
+		for line, _, err := r.ReadLine(); err != io.EOF; line, _, err = r.ReadLine() {
 			doc := &Doc{}
 			json.Unmarshal(line, doc)
 			ppd.ps.docs[doc.Name] = doc
-			line, _, err = r.ReadLine()
+			docData := ppd.loadDoc(doc)
+			doc.diffs = docData.Diffs
 		}
 		fmt.Println("Docs read from metaData: ", ppd.ps.docs)
 	} else {
@@ -73,27 +98,25 @@ func (ppd *PadPersistenceWorker) loadFromMetaData() {
  * current state. The content is written to the document's corresponding file on disk.
  */
 func (ppd *PadPersistenceWorker) syncDoc(docName string, doc *Doc) error {
-	path := DOC + strconv.FormatInt(doc.Id, 10) + TXT
-	// read whole the file
-	b, err := ioutil.ReadFile(path)
-	if err != nil {
-		panic(err)
-	}
+	oldData := ppd.loadDoc(doc)
 
 	// For demonstration purposes:
-	currentContent := string(b)
+	currentContent := oldData.Content
 	if currentContent == "" {
 		currentContent = "0"
 	}
-	fmt.Printf("CURRENT CONTENT: %s \n", currentContent)
+	// fmt.Printf("CURRENT CONTENT: %s \n", currentContent)
 	temp, _ := strconv.Atoi(currentContent)
 	newContent := strconv.Itoa(temp + 1) // new doc content
-	fmt.Printf("NEW CONTENT: %s \n", newContent)
+	// fmt.Printf("NEW CONTENT: %s \n", newContent)
+
+	newData := PersistentDocData{newContent, doc.diffs}
+	b, _ := json.Marshal(newData)
 
 	// TODO: get doc changes to write to disk
 
 	// write whole the body
-	err = ioutil.WriteFile(path, []byte(newContent), 0644)
+	err := ioutil.WriteFile(ppd.pathForDoc(doc), b, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -108,8 +131,14 @@ func (ppd *PadPersistenceWorker) syncAllDocs() {
 	for docName, doc := range ppd.ps.docs {
 		// TODO: need to manage the diffs performed so far?
 		go ppd.syncDoc(docName, doc)
-		fmt.Printf("DOCNAME: %s %s\n", docName, strconv.FormatInt(doc.Id, 10))
 	}
+}
+
+/*
+ * Yields path to a Doc's PadPersistentData
+ */
+func (ppd *PadPersistenceWorker) pathForDoc(doc *Doc) string {
+	return DOC + strconv.FormatInt(doc.Id, 10) + JSON
 }
 
 /*
