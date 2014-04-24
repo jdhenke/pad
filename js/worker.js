@@ -5,7 +5,7 @@
 importScripts("/js/git.js");
 
 var state = {
-  headContent: "",
+  headText: "",
   commits: [{
     parent: null,
     diff: [],
@@ -15,11 +15,11 @@ var state = {
   isUpdating: false,
 };
 
-// commits diff from headContent to newContent and sends it to the server.
+// commits diff from headText to newText and sends it to the server.
 // parent is included because pending live updates makes the use of head()
 // inconsistent.
-function commitAndPush(newContent, parent) {
-  var diff = getDiff(state.headContent, newContent);
+function commitAndPush(newText, parent) {
+  var diff = getDiff(state.headText, newText);
   var commit = {
     clientID: state.clientID,
     parent: parent,
@@ -71,13 +71,13 @@ function tryNextUpdate() {
   var commit = state.pendingUpdates.shift();
   fastForward(commit);
 
-  // now in an inconsistent state, but it's protected by isPending. headContent
+  // now in an inconsistent state, but it's protected by isPending. headText
   // is as of head() - 1, because we've added the new commit to commits but did
-  // NOT updating headContent.
+  // NOT updating headText.
   //
   // now we kick off a back and forth between main and this worker, which only
   // ends when main accepts a live update. at that point, the logic in the
-  // handler should update headContent, release isUpdating, and try again.
+  // handler should update headText, release isUpdating, and try again.
 
   if (commit.clientID == state.clientID) {
     // because this commit actually originated from this client, it's been
@@ -129,8 +129,8 @@ function fastForward(commit) {
 // adjust head state to reflect the latest diff. now head() is reasonable again.
 function advanceHeadState() {
   var diff = state.commits[state.commits.length - 1].diff;
-  var newHeadContent = applyDiff(state.headContent, diff);
-  state.headContent = newHeadContent;
+  var newHeadtext = applyDiff(state.headText, diff);
+  state.headText = newHeadtext;
 }
 
 // given data containing the latest state of the UI, rebase the changes since
@@ -146,29 +146,29 @@ function advanceHeadState() {
 // therefore, rebase was modified to include an additional insert of a cursor
 // into the correct location in the event this happens.
 function tryUpdateMain(data) {
-  var currentContent = data.content;
+  var currentText = data.text;
   var selectionStart = data.selectionStart;
   var selectionEnd = data.selectionEnd;
-  currentContent = currentContent.substring(0, selectionStart) + "\x00" +
-                   currentContent.substring(selectionStart, selectionEnd) +
-                   "\x00" + currentContent.substring(selectionEnd);
+  currentText = currentText.substring(0, selectionStart) + "\x00" +
+                   currentText.substring(selectionStart, selectionEnd) +
+                   "\x00" + currentText.substring(selectionEnd);
   var newDiff = state.commits[state.commits.length - 1].diff;
-  var localDiff = getDiff(state.headContent, currentContent);
+  var localDiff = getDiff(state.headText, currentText);
   var newLocalDiff = rebase(newDiff, localDiff);
-  var newHeadContent = applyDiff(state.headContent, newDiff);
-  var newContent = applyDiff(newHeadContent, newLocalDiff);
-  var newCursorStart = newContent.indexOf("\x00");
-  var newCursorEnd = newContent.lastIndexOf("\x00") - 1;
-  newContent = newContent.replace("\x00", "");
-  newContent = newContent.replace("\x00", "");
+  var newHeadtext = applyDiff(state.headText, newDiff);
+  var newText = applyDiff(newHeadtext, newLocalDiff);
+  var newSelectionStart = newText.indexOf("\x00");
+  var newSelectionEnd = newText.lastIndexOf("\x00") - 1;
+  newText = newText.replace("\x00", "");
+  newText = newText.replace("\x00", "");
   postMessage({
     type: "live-update",
-    oldContent: data.content,
-    newContent: newContent,
-    oldSelectionStart: data.selectionStart,
-    oldSelectionEnd: data.selectionEnd,
-    newSelectionStart: newCursorStart,
-    newSelectionEnd: newCursorEnd,
+    oldState: data,
+    newState: {
+      text: newText,
+      selectionStart: newSelectionStart,
+      selectionEnd: newSelectionEnd,
+    },
     head: head(),
   });
 }
@@ -190,14 +190,14 @@ onmessage = function(evt) {
     // main to try again. accepting a commit means it will be sent to the server
     // and commit-received will be sent once the commit is received back from
     // the server and processed as the latest commit.
-    if (data.content == state.headContent ||
+    if (data.text == state.headText ||
         state.isPending ||
         data.parent != head()) {
       postMessage({
         type: "commit-received",
       });
     } else {
-      commitAndPush(data.content, data.parent);
+      commitAndPush(data.text, data.parent);
     }
 
   } else if (data.type == "live-state") {
@@ -205,7 +205,7 @@ onmessage = function(evt) {
     // this web worker is in the middle of trying to push an update to the UI,
     // so the current state of the UI was requested so it can be adjusted to
     // incorporate these changes.
-    tryUpdateMain(data);
+    tryUpdateMain(data.state);
 
   } else if (data.type == "live-update-response") {
 
