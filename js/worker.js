@@ -26,34 +26,38 @@ function commitAndPush(newText, parent) {
     parent: parent,
     diff: diff,
   };
-  postMessage({
-    type: "ajax",
-    data: {
-      "doc-id": state.docID,
-      "diff": JSON.stringify(commit),
-    },
-  });
+  function reqListener() { }
+  var req = new XMLHttpRequest();
+  req.onload = reqListener;
+  req.open("put", "/diffs/put");
+  req.setRequestHeader('doc-id', state.docID);
+  req.send(JSON.stringify(commit));
 }
 
 // continuously tries to establish connection and apply served updates
 function startContinuousPull() {
-  var addr = "ws://";
-  addr += location.hostname;
-  addr += ":" + location.port
-  addr += "/diffs/get";
-  var conn = new WebSocket(addr);
-  conn.onopen = function() {
-    conn.send(state.docID);
-    conn.send(head() + 1);
-  };
-  conn.onclose = function(evt) {
-    setTimeout(startContinuousPull, 1000);
-  };
-  conn.onmessage = function(evt) {
-    var commit = JSON.parse(evt.data);
+
+  function success() {
+    var commit = JSON.parse(this.responseText);
     state.pendingUpdates.push(commit);
     tryNextUpdate();
-  };
+    startContinuousPull();
+  }
+
+  function failure() {
+    console.log(this.responseText);
+    setTimeout(startContinuousPull, 1000);
+  }
+
+  var nextDiff = state.commits.length + state.pendingUpdates.length;
+  var req = new XMLHttpRequest();
+  req.addEventListener("load", success, true);
+  req.addEventListener("error", failure, true);
+  req.open("post", "/diffs/get");
+  req.setRequestHeader('doc-id', state.docID);
+  req.setRequestHeader('next-diff', nextDiff);
+  req.send();
+
 }
 
 // if not already trying to update and queued updates from the server exist,

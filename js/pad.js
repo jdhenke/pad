@@ -81,22 +81,8 @@ function Pad(params) {
         success: success,
       });
 
-    } else if (data.type == "ajax") {
-      // ajax calls are a pain without jQuery and jQuery's a pain in the web
-      // worker, so data used for ajax calls is sent here and jquery is used to
-      // perform the request.
-      $.ajax({
-        url: "/diffs/put",
-        type: "PUT",
-        data: data.data,
-        success: function(e) {
-        },
-        error: function(e) {
-          console.log(e.responseText);
-        }
-      });
-
     }
+
   }.bind(this);
 
   // tries to commit the current state of the document
@@ -109,7 +95,7 @@ function Pad(params) {
     state.triedWhilePending = false;
     var liveState = {
       type: "commit",
-      text: $("#pad").val(),
+      text: this.getState().text,
       parent: state.head,
     };
     worker.postMessage(liveState);

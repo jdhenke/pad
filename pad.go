@@ -1,7 +1,6 @@
 package main
 
 import (
-	"code.google.com/p/go.net/websocket"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -64,16 +63,16 @@ func NewDoc(docID string) *Doc {
 	return doc
 }
 
-func (doc *Doc) getDiff(id int) chan Diff {
+func (doc *Doc) getDiff(id int) Diff {
 	doc.mu.Lock()
-	defer doc.mu.Unlock()
 	c := make(chan Diff, 1)
 	if id < len(doc.diffs) {
 		c <- doc.diffs[id]
 	} else {
 		doc.listeners = append(doc.listeners, c)
 	}
-	return c
+	doc.mu.Unlock()
+	return <- c
 }
 
 func (doc *Doc) putDiff(diff Diff) {
@@ -91,23 +90,18 @@ func (doc *Doc) putDiff(diff Diff) {
 func (ps *PadServer) diffPutter(w http.ResponseWriter, r *http.Request) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	docID := r.PostFormValue("doc-id")
-	diff := Diff(r.PostFormValue("diff"))
+	docID := r.Header.Get("doc-id")
+	diff, _ := ioutil.ReadAll(r.Body)
 	doc, ok := ps.docs[docID]
 	if !ok {
 		ps.docs[docID] = NewDoc(docID)
 		doc = ps.docs[docID]
 	}
-	doc.putDiff(diff)
+	doc.putDiff(Diff(diff))
 }
 
-func (ps *PadServer) diffGetter(ws *websocket.Conn) {
-	var docID string
-	websocket.Message.Receive(ws, &docID)
-	var msg string
-	websocket.Message.Receive(ws, &msg)
-	nextDiff, _ := strconv.Atoi(msg)
-
+func (ps *PadServer) diffGetter(w http.ResponseWriter, r *http.Request) {
+	docID := r.Header.Get("doc-id")
 	ps.mu.Lock()
 	doc, ok := ps.docs[docID]
 	if !ok {
@@ -115,16 +109,9 @@ func (ps *PadServer) diffGetter(ws *websocket.Conn) {
 		doc = ps.docs[docID]
 	}
 	ps.mu.Unlock()
-
-	for {
-		c := doc.getDiff(nextDiff)
-		diff := <-c
-		err := websocket.Message.Send(ws, string(diff))
-		if err != nil {
-			return
-		}
-		nextDiff += 1
-	}
+	nextDiff, _ := strconv.Atoi(r.Header.Get("next-diff"))
+	diff := doc.getDiff(nextDiff)
+	w.Write([]byte(diff))
 }
 
 func (ps *PadServer) docHandler(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +132,7 @@ func nrand() int64 {
 
 func (ps *PadServer) Start() {
 	http.HandleFunc("/diffs/put", ps.diffPutter)
-	http.Handle("/diffs/get", websocket.Handler(ps.diffGetter))
+	http.HandleFunc("/diffs/get", ps.diffGetter)
 	http.HandleFunc("/docs/", ps.docHandler)
 	http.Handle("/js/", http.FileServer(http.Dir("./")))
 	http.ListenAndServe(":8080", nil)
