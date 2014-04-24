@@ -82,7 +82,6 @@ function Pad(params) {
       });
 
     } else if (data.type == "ajax") {
-
       // ajax calls are a pain without jQuery and jQuery's a pain in the web
       // worker, so data used for ajax calls is sent here and jquery is used to
       // perform the request.

@@ -13,6 +13,7 @@ var state = {
   clientID: + new Date(),
   pendingUpdates: [],
   isUpdating: false,
+  docID: null,
 };
 
 // commits diff from headText to newText and sends it to the server.
@@ -28,7 +29,7 @@ function commitAndPush(newText, parent) {
   postMessage({
     type: "ajax",
     data: {
-      "doc-id": location.pathname,
+      "doc-id": state.docID,
       "diff": JSON.stringify(commit),
     },
   });
@@ -42,7 +43,7 @@ function startContinuousPull() {
   addr += "/diffs/get";
   var conn = new WebSocket(addr);
   conn.onopen = function() {
-    conn.send(location.pathname);
+    conn.send(state.docID);
     conn.send(head() + 1);
   };
   conn.onclose = function(evt) {
@@ -181,7 +182,15 @@ function head() {
 // handle messages sent from main
 onmessage = function(evt) {
   var data = evt.data;
-  if (data.type == "commit") {
+  if (data.type == "docID") {
+
+    // first message this worker should receive; this is the docID which
+    // uniquely identifies the doc this worker is responsible for. only once
+    // this has been given can the worker initiate a continuous back and forth
+    // with the server.
+    state.docID = data.docID;
+    startContinuousPull();
+  } else if (data.type == "commit") {
 
     // main is sending its current state to create a commit and send to the
     // server. this attempt could be rejected if the diff is empty, or this web
@@ -228,7 +237,4 @@ onmessage = function(evt) {
       });
     }
   }
-}
-
-// initialize websockets which propagate udpates pushed by the server to the UI
-startContinuousPull();
+};

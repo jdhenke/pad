@@ -38,8 +38,8 @@ type Diff string
 func MakePadServer() *PadServer {
 	ps := &PadServer{}
 	ps.docs = make(map[string]*Doc)
-	ps.ppd = MakePersistenceWorker(ps)
-	ps.ppd.Start()
+/*	ps.ppd = MakePersistenceWorker(ps)
+	ps.ppd.Start()*/
 	return ps
 }
 
