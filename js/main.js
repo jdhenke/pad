@@ -1,4 +1,13 @@
 $(function() {
+
+  // if this is being automatically tested, let the tester initiate its own
+  // instance of the pad javascript client - don't much with things by syncing
+  // up the text area.
+  if (navigator.userAgent.index("PhantomJS") >= 0) {
+    return;
+  }
+
+  // if this is a real user, sync up the textarea
   var textArea = document.querySelector("#pad");
   var pad = new Pad({
     getState: function() {
