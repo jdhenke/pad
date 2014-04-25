@@ -7,7 +7,7 @@ window.addEventListener("load", function() {
     return;
   }
 
-  // if this is a real user, sync up the textarea
+  // if this is a real user, sync up the textarea using Pad Javascript Client
   var textArea = document.querySelector("#pad");
   var pad = new Pad({
     getState: function() {
@@ -25,6 +25,10 @@ window.addEventListener("load", function() {
     },
     docID: document.location.pathname,
   });
+
+  // each time the client types, attempt to propagate it to other users. if
+  // there is a pending commit, pad knows to immediately to try commit as soon
+  // as the outstanding commit is processed, including all the latest changes.
   textArea.addEventListener("keyup", function() {
     pad.tryCommit();
   });

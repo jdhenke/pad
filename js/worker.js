@@ -2,8 +2,10 @@
 // off of the UI thread, so delays don't 1) slow down a live interface 2) force
 // the UI to be locked for a long time.
 
+// globally define git utility functions
 importScripts("/js/git.js");
 
+// history/current state of this document
 var state = {
   headText: "",
   commits: [{
@@ -29,7 +31,7 @@ function commitAndPush(newText, parent) {
   function reqListener() { }
   var req = new XMLHttpRequest();
   req.onload = reqListener;
-  req.open("put", "/diffs/put");
+  req.open("put", "/commits/put");
   req.setRequestHeader('doc-id', state.docID);
   req.send(JSON.stringify(commit));
 }
@@ -53,9 +55,9 @@ function startContinuousPull() {
   var req = new XMLHttpRequest();
   req.addEventListener("load", success, true);
   req.addEventListener("error", failure, true);
-  req.open("post", "/diffs/get");
+  req.open("post", "/commits/get");
   req.setRequestHeader('doc-id', state.docID);
-  req.setRequestHeader('next-diff', nextDiff);
+  req.setRequestHeader('next-commit', nextDiff);
   req.send();
 
 }

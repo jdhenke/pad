@@ -1,3 +1,4 @@
+// globally defines the Pad Javascript Client
 function Pad(params) {
 
   // store given parameters as attributes of this pad client object

@@ -1,5 +1,8 @@
 package main
 
+// illustrates how a Go program can interface with our node server to use its
+// git utility function RPCs.
+
 import (
   "fmt"
   "net/http"
@@ -9,9 +12,7 @@ import (
 
 func main() {
 
-  // play with these!!!
-  //
-  // NOTE: the must have quotes in the string on each side!
+  // play with these!!! NOTE: the must have quotes in the string on each side!
   start := "\"joe henke\""
   userA := "\"joseph henke\""
   userB := "\"joe dalton henke\""
@@ -24,6 +25,7 @@ func main() {
   r2 := applyDiff(r1, d2Prime)
 
   // print out the scenario and progression
+  fmt.Println("Doing all this logic from a *Go* client!!!\n")
   fmt.Println("Start:", start)
   fmt.Println("User A:", userA)
   fmt.Println("User B:", userB)

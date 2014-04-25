@@ -1,3 +1,7 @@
+// purely functional utility functions for git operations. this file is useable
+// to include in a website or a node application. it defines globally/exports as
+// attributes of the module: getDiff, rebase, applyDiff
+
 // creates diff from a -> b
 function getDiff(a, b) {
 

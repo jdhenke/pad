@@ -9,7 +9,7 @@ go run *.go
 
 Visit [http://localhost:8080/docs/DocID](http://localhost:8080/docs/DocID). Change `DocID` to get a different document.
 
-## Node Server
+## Go Client/Node Server Example
 
 To run the node server and a sample go client, do the following
 
