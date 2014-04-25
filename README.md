@@ -30,3 +30,22 @@ Should produce something like the following:
     	 "joseph henke"
     	 "joseph dalton henke"
     [1]+  Killed: 9               node app.js
+
+## PhantomJS Example Tester
+
+To run an example of how PhantomJS can be used to simulate multiple clients at the same time and that illustrates the latency of a commit, ensure your PhantomJS is installed (`npm install`) and do the following.
+
+```bash
+./test
+```
+
+Should produce something like the following.
+
+    $ ./test
+    // Spinning up Pad server and two separate clients...
+    client1.setText(message @ 1398467494089)
+    client2.getText() = ""
+    // sleeping 1s...
+    client2.getText() = "message @ 1398467494089"
+
+See `tester.js` for details.

@@ -53,3 +53,6 @@ build/Release
 node_modules
 
 .DS_Store
+
+# compiled pad server
+pad
