@@ -5,6 +5,10 @@
 var git = require('./js/git');
 
 // listen
+var port = parseInt(process.argv[2]);
+if (isNaN(port)) {
+  throw "Invalid port";
+}
 require('http').createServer(function(req, res) {
 
   // aggregate incoming data
@@ -30,7 +34,7 @@ require('http').createServer(function(req, res) {
       return res.end('error: ' + er.message + "\n");
     }
   })
-}).listen(7000);
+}).listen(port);
 
 function getDiffHandler(data) {
   return git.getDiff(data.a, data.b);

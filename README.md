@@ -14,7 +14,7 @@ Visit [http://localhost:8080/docs/DocID](http://localhost:8080/docs/DocID). Chan
 To run the node server and a sample go client, do the following
 
 ```bash
-node app.js & pid=$! ; go run client.go ; kill -s 9 $pid
+node app.js 7000 & pid=$! ; go run client.go ; kill -s 9 $pid
 ```
 
 Should produce something like the following:
