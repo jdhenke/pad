@@ -2,8 +2,12 @@
 // off of the UI thread, so delays don't 1) slow down a live interface 2) force
 // the UI to be locked for a long time.
 
+// globally define git utility functions
+importScripts("/js/git.js");
+
+// history/current state of this document
 var state = {
-  headContent: "",
+  headText: "",
   commits: [{
     parent: null,
     diff: [],
@@ -11,46 +15,51 @@ var state = {
   clientID: + new Date(),
   pendingUpdates: [],
   isUpdating: false,
+  docID: null,
 };
 
-// commits diff from headContent to newContent and sends it to the server.
+// commits diff from headText to newText and sends it to the server.
 // parent is included because pending live updates makes the use of head()
 // inconsistent.
-function commitAndPush(newContent, parent) {
-  var diff = getDiff(state.headContent, newContent);
+function commitAndPush(newText, parent) {
+  var diff = getDiff(state.headText, newText);
   var commit = {
     clientID: state.clientID,
     parent: parent,
     diff: diff,
   };
-  postMessage({
-    type: "ajax",
-    data: {
-      "doc-id": location.pathname,
-      "diff": JSON.stringify(commit),
-    },
-  });
+  function reqListener() { }
+  var req = new XMLHttpRequest();
+  req.onload = reqListener;
+  req.open("put", "/commits/put");
+  req.setRequestHeader('doc-id', state.docID);
+  req.send(JSON.stringify(commit));
 }
 
 // continuously tries to establish connection and apply served updates
 function startContinuousPull() {
-  var addr = "ws://";
-  addr += location.hostname;
-  addr += ":" + location.port
-  addr += "/diffs/get";
-  var conn = new WebSocket(addr);
-  conn.onopen = function() {
-    conn.send(location.pathname);
-    conn.send(head() + 1);
-  };
-  conn.onclose = function(evt) {
-    setTimeout(startContinuousPull, 1000);
-  };
-  conn.onmessage = function(evt) {
-    var commit = JSON.parse(evt.data);
+
+  function success() {
+    var commit = JSON.parse(this.responseText);
     state.pendingUpdates.push(commit);
     tryNextUpdate();
-  };
+    startContinuousPull();
+  }
+
+  function failure() {
+    console.log(this.responseText);
+    setTimeout(startContinuousPull, 1000);
+  }
+
+  var nextDiff = state.commits.length + state.pendingUpdates.length;
+  var req = new XMLHttpRequest();
+  req.addEventListener("load", success, true);
+  req.addEventListener("error", failure, true);
+  req.open("post", "/commits/get");
+  req.setRequestHeader('doc-id', state.docID);
+  req.setRequestHeader('next-commit', nextDiff);
+  req.send();
+
 }
 
 // if not already trying to update and queued updates from the server exist,
@@ -69,13 +78,13 @@ function tryNextUpdate() {
   var commit = state.pendingUpdates.shift();
   fastForward(commit);
 
-  // now in an inconsistent state, but it's protected by isPending. headContent
+  // now in an inconsistent state, but it's protected by isPending. headText
   // is as of head() - 1, because we've added the new commit to commits but did
-  // NOT updating headContent.
+  // NOT updating headText.
   //
   // now we kick off a back and forth between main and this worker, which only
   // ends when main accepts a live update. at that point, the logic in the
-  // handler should update headContent, release isUpdating, and try again.
+  // handler should update headText, release isUpdating, and try again.
 
   if (commit.clientID == state.clientID) {
     // because this commit actually originated from this client, it's been
@@ -127,8 +136,8 @@ function fastForward(commit) {
 // adjust head state to reflect the latest diff. now head() is reasonable again.
 function advanceHeadState() {
   var diff = state.commits[state.commits.length - 1].diff;
-  var newHeadContent = applyDiff(state.headContent, diff);
-  state.headContent = newHeadContent;
+  var newHeadtext = applyDiff(state.headText, diff);
+  state.headText = newHeadtext;
 }
 
 // given data containing the latest state of the UI, rebase the changes since
@@ -144,270 +153,31 @@ function advanceHeadState() {
 // therefore, rebase was modified to include an additional insert of a cursor
 // into the correct location in the event this happens.
 function tryUpdateMain(data) {
-  var currentContent = data.content;
+  var currentText = data.text;
   var selectionStart = data.selectionStart;
   var selectionEnd = data.selectionEnd;
-  currentContent = currentContent.substring(0, selectionStart) + "\x00" +
-                   currentContent.substring(selectionStart, selectionEnd) +
-                   "\x00" + currentContent.substring(selectionEnd);
+  currentText = currentText.substring(0, selectionStart) + "\x00" +
+                   currentText.substring(selectionStart, selectionEnd) +
+                   "\x00" + currentText.substring(selectionEnd);
   var newDiff = state.commits[state.commits.length - 1].diff;
-  var localDiff = getDiff(state.headContent, currentContent);
+  var localDiff = getDiff(state.headText, currentText);
   var newLocalDiff = rebase(newDiff, localDiff);
-  var newHeadContent = applyDiff(state.headContent, newDiff);
-  var newContent = applyDiff(newHeadContent, newLocalDiff);
-  var newCursorStart = newContent.indexOf("\x00");
-  var newCursorEnd = newContent.lastIndexOf("\x00") - 1;
-  newContent = newContent.replace("\x00", "");
-  newContent = newContent.replace("\x00", "");
+  var newHeadtext = applyDiff(state.headText, newDiff);
+  var newText = applyDiff(newHeadtext, newLocalDiff);
+  var newSelectionStart = newText.indexOf("\x00");
+  var newSelectionEnd = newText.lastIndexOf("\x00") - 1;
+  newText = newText.replace("\x00", "");
+  newText = newText.replace("\x00", "");
   postMessage({
     type: "live-update",
-    oldContent: data.content,
-    newContent: newContent,
-    oldSelectionStart: data.selectionStart,
-    oldSelectionEnd: data.selectionEnd,
-    newSelectionStart: newCursorStart,
-    newSelectionEnd: newCursorEnd,
+    oldState: data,
+    newState: {
+      text: newText,
+      selectionStart: newSelectionStart,
+      selectionEnd: newSelectionEnd,
+    },
     head: head(),
   });
-}
-
-// creates diff from a -> b
-function getDiff(a, b) {
-
-  // perform dynamic program to create diff
-  var memo = {};
-
-  // dp(i,j) returns operations to transform a[:i] into b[:j]. we return
-  // the actual stored object; do not modify it.
-  var dp = function(i, j) {
-
-    // check if answer is memoized; if so return it
-    var key = i + "," + j;
-    if (key in memo) {
-      return memo[key];
-    }
-
-    // if not compute, store and return it
-    var answer;
-    if (i == 0 && j == 0) {
-      // both documents finished together
-      answer = {type: null, cost: 0};
-    } else {
-      var options = [];
-      if (j > 0) {
-        var insertResult = dp(i, j-1);
-        options.push({
-          type: "Insert",
-          index: i,
-          val: b[j-1],
-          cost: insertResult.cost + 1,
-          last: insertResult,
-        });
-      }
-      if (i > 0) {
-        var deleteResult = dp(i-1, j);
-        options.push({
-          type: "Delete",
-          index: i - 1,
-          size: 1,
-          cost: deleteResult.cost + 1,
-          last: deleteResult,
-        });
-      }
-      if (a[i-1] == b[j-1]) {
-        var sameResult = dp(i-1, j-1);
-        options.push(sameResult);
-      }
-
-      var minOp = options[0];
-      for (var k=1; k < options.length; k += 1) {
-        if (options[k].cost < minOp.cost) {
-          minOp = options[k];
-        }
-      }
-      answer = minOp;
-    }
-
-    memo[key] = answer;
-    return answer;
-  }
-
-  var result = dp(a.length, b.length);
-  var ops = [];
-  while (result.type != null) {
-    var nextResult = result.last;
-    delete result.cost;
-    delete result.last;
-    ops.push(result);
-    result = nextResult;
-  }
-  ops = ops.reverse();
-
-
-  // collapse adjacent
-  if (ops.length == 0) {
-    return []
-  }
-  var diff = [];
-  var runningOp = ops[0];
-  for (var i = 1; i < ops.length; i += 1) {
-    if (runningOp.type == "Insert" &&
-        ops[i].type == "Insert" &&
-        ops[i].index == runningOp.index) {
-      runningOp.val += ops[i].val;
-    } else if (runningOp.type == "Delete" &&
-        ops[i].type == "Delete" &&
-        ops[i].index == runningOp.index + runningOp.size) {
-      runningOp.size += 1;
-    } else {
-      diff.push(runningOp);
-      runningOp = ops[i];
-    }
-  }
-  diff.push(runningOp);
-  return diff;
-}
-
-// returns the result of applying diff to content
-function applyDiff(content, diff) {
-  var index = 0;
-  var output = "";
-  for (var i = 0; i < diff.length; i += 1) {
-    var op = diff[i];
-    output += content.substring(index, op.index);
-    index = op.index
-    if (op.type == "Insert") {
-      output += op.val;
-    } else if (op.type == "Delete") {
-      index += op.size;
-    }
-  }
-  output += content.substring(index, content.length);
-  return output;
-}
-
-// given two diffs to the same document, return a d2' which captures as many of
-// the changes in d2 as possible and can be applied to the document + d1.
-// mutates d2. ensures cursor locations, marked by null characters, are not
-// deleted, but rather maintained into reasonable locations through deletions.
-function rebase(d1, d2) {
-
-  // cumulative state as we iterate through with two fingers
-  var i = 0;
-  var j = 0;
-  var output = [];
-  var shift = 0;
-
-  // possible options at each stage
-  var doOldInsert = function() {
-    shift += d1[i].val.length;
-    i += 1;
-  }
-  var doOldDelete = function() {
-    // we want to ignore any inserts contained strictly in the bounds we
-    // also want to ignore any delets contained *strictly* in the bounds
-    // we want to modify partially overlapping deletes
-    while (j < d2.length && d2[j].index < d1[i].index + d1[i].size) {
-      if (d2[j].type == "Insert") {
-        // ignore it. account for cursor positions marked with null char.
-        var cursorIndex1 = d2[j].val.indexOf("\x00");
-        var cursorIndex2 = d2[j].val.lastIndexOf("\x00");
-        var insertCursor = function() {
-          output.push({
-            type: "Insert",
-            index: d1[i].index + shift,
-            val: "\x00",
-          });
-        };
-        if (cursorIndex1 >= 0) {
-          insertCursor();
-        }
-        if (cursorIndex2 > cursorIndex1) {
-          insertCursor();
-        }
-      } else if (d2[j].type == "Delete") {
-        if (d2[j].index + d2[j].size > d1[i].index + d1[i].size) {
-          // delete has mismatched overlap
-          // OLD: --[--]--
-          // NEW: ---[--]-
-          //    : --[-]-
-          var op = d2[j];
-          op.index = d1[i].index + shift;
-          op.size = d2[j].index + d2[j].size - d1[i].index + d1[i].size;
-          output.push(op);
-        } else {
-          // delete is completely contained, ignore.
-        }
-      }
-      j += 1;
-    }
-    shift -= d1[i].size;
-    i += 1;
-  }
-  var doNewInsert = function() {
-    var op = d2[j];
-    op.index += shift;
-    output.push(op);
-    j += 1;
-  }
-  var doNewDelete = function() {
-    // we want to adjust this delete's starting index appropriately. we
-    // also want to adjust this delete's size based on any ops this delete
-    // strictly contains.
-    var op = d2[j];
-    op.index += shift;
-    var originalSize = op.size;
-    while (i < d1.size && d1[i].index < op.index + originalSize) {
-      if (d1[i].type == "Insert") {
-        // need to increase the size to include this insert
-        op.size += d1[i].val.length;
-        shift += d1[i].val.length;
-      } else if (d1[i].type == "Delete") {
-        // need to adjust the size to be up to
-        // NEW: --[---]--
-        // OLD: ---[-]---
-        // OLD: ---[---]-
-        var smallerRightBoundary = Math.min(op.index + originalSize,
-                                            d1[i].index + d1[i].size);
-        op.size -= smallerRightBoundar - d1[i].index;
-        shift -= d1[i].size;
-      }
-      i += 1;
-    }
-    j += 1;
-  }
-
-  while (i < d1.length && j < d2.length) {
-    if (d1[i].index < d2[j].index) {
-      if (d1[i].type == "Insert") {
-        doOldInsert();
-      } else if (d1[i].type == "Delete") {
-        doOldDelete();
-      }
-    } else if (d2[j].index < d1[i].index) {
-      if (d2[j].type == "Insert") {
-        doNewInsert();
-      } else if (d2[j].type == "Delete") {
-        doNewDelete();
-      }
-    } else { // must be equal
-      if (d1[i].type == "Insert") {
-        doOldInsert();
-      } else if (d2[j].type == "Insert") {
-        doNewInsert();
-      } else if (d1[i].type == "Delete") {
-        doOldDelete();
-      }
-    }
-  }
-  while (j < d2.length) {
-    if (d2[j].type == "Insert") {
-      doNewInsert();
-    } else if (d2[j].type == "Delete") {
-      doNewDelete();
-    }
-  }
-  return output;
 }
 
 // get the index of the latest commit
@@ -418,7 +188,15 @@ function head() {
 // handle messages sent from main
 onmessage = function(evt) {
   var data = evt.data;
-  if (data.type == "commit") {
+  if (data.type == "docID") {
+
+    // first message this worker should receive; this is the docID which
+    // uniquely identifies the doc this worker is responsible for. only once
+    // this has been given can the worker initiate a continuous back and forth
+    // with the server.
+    state.docID = data.docID;
+    startContinuousPull();
+  } else if (data.type == "commit") {
 
     // main is sending its current state to create a commit and send to the
     // server. this attempt could be rejected if the diff is empty, or this web
@@ -427,14 +205,14 @@ onmessage = function(evt) {
     // main to try again. accepting a commit means it will be sent to the server
     // and commit-received will be sent once the commit is received back from
     // the server and processed as the latest commit.
-    if (data.content == state.headContent ||
+    if (data.text == state.headText ||
         state.isPending ||
         data.parent != head()) {
       postMessage({
         type: "commit-received",
       });
     } else {
-      commitAndPush(data.content, data.parent);
+      commitAndPush(data.text, data.parent);
     }
 
   } else if (data.type == "live-state") {
@@ -442,7 +220,7 @@ onmessage = function(evt) {
     // this web worker is in the middle of trying to push an update to the UI,
     // so the current state of the UI was requested so it can be adjusted to
     // incorporate these changes.
-    tryUpdateMain(data);
+    tryUpdateMain(data.state);
 
   } else if (data.type == "live-update-response") {
 
@@ -465,7 +243,4 @@ onmessage = function(evt) {
       });
     }
   }
-}
-
-// initialize websockets which propagate udpates pushed by the server to the UI
-startContinuousPull();
+};

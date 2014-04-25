@@ -28,11 +28,11 @@ type PadPersistenceWorker struct {
 
 /*
  * Representation of a Doc's data stored on disk. It includes the interpretted content
- * of all the diffs encountered for the doc, and the diffs themselves
+ * of all the commits encountered for the doc, and the commits themselves
  */
 type PersistentDocData struct {
 	Content string
-	Diffs   []Diff
+	Commits   []Commit
 }
 
 /*
@@ -83,7 +83,7 @@ func (ppd *PadPersistenceWorker) loadAllDocs() {
 			json.Unmarshal(line, doc)
 			ppd.ps.docs[doc.Name] = doc
 			docData := ppd.loadDoc(doc)
-			doc.diffs = docData.Diffs
+			doc.commits = docData.Commits
 		}
 		fmt.Println("Docs read from metaData: ", ppd.ps.docs)
 	} else {
@@ -94,7 +94,7 @@ func (ppd *PadPersistenceWorker) loadAllDocs() {
 
 /*
  * Syncs an individual document to disk. This is done by contacting the Node service
- * with the Diffs stored by each doc to receive the interpreted contents of the Doc's
+ * with the Commits stored by each doc to receive the interpreted contents of the Doc's
  * current state. The content is written to the document's corresponding file on disk.
  */
 func (ppd *PadPersistenceWorker) syncDoc(docName string, doc *Doc) error {
@@ -110,7 +110,7 @@ func (ppd *PadPersistenceWorker) syncDoc(docName string, doc *Doc) error {
 	newContent := strconv.Itoa(temp + 1) // new doc content
 	// fmt.Printf("NEW CONTENT: %s \n", newContent)
 
-	newData := PersistentDocData{newContent, doc.diffs}
+	newData := PersistentDocData{newContent, doc.commits}
 	b, _ := json.Marshal(newData)
 
 	// TODO: get doc changes to write to disk
@@ -129,7 +129,7 @@ func (ppd *PadPersistenceWorker) syncDoc(docName string, doc *Doc) error {
  */
 func (ppd *PadPersistenceWorker) syncAllDocs() {
 	for docName, doc := range ppd.ps.docs {
-		// TODO: need to manage the diffs performed so far?
+		// TODO: need to manage the commits performed so far?
 		go ppd.syncDoc(docName, doc)
 	}
 }

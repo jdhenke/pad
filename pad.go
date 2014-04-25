@@ -1,7 +1,6 @@
 package main
 
 import (
-	"code.google.com/p/go.net/websocket"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -24,22 +23,22 @@ type PadServer struct {
 }
 
 type Doc struct {
-	diffs     []Diff
+	commits     []Commit
 	mu        sync.Mutex
-	listeners []chan Diff
+	listeners []chan Commit
 	Id        int64
 	Name      string //TODO: Make a Doc metadata structure to store doc identification
 }
 
-type Diff string
+type Commit string
 
 // PAD SERVER
 
 func MakePadServer() *PadServer {
 	ps := &PadServer{}
 	ps.docs = make(map[string]*Doc)
-	ps.ppd = MakePersistenceWorker(ps)
-	ps.ppd.Start()
+/*	ps.ppd = MakePersistenceWorker(ps)
+	ps.ppd.Start()*/
 	return ps
 }
 
@@ -47,8 +46,8 @@ func MakePadServer() *PadServer {
 
 func NewDoc(docID string) *Doc {
 	doc := &Doc{}
-	doc.diffs = make([]Diff, 1)
-	doc.listeners = make([]chan Diff, 0)
+	doc.commits = make([]Commit, 1)
+	doc.listeners = make([]chan Commit, 0)
 	doc.Id = nrand()
 	doc.Name = docID
 
@@ -64,50 +63,45 @@ func NewDoc(docID string) *Doc {
 	return doc
 }
 
-func (doc *Doc) getDiff(id int) chan Diff {
+func (doc *Doc) getCommit(id int) Commit {
 	doc.mu.Lock()
-	defer doc.mu.Unlock()
-	c := make(chan Diff, 1)
-	if id < len(doc.diffs) {
-		c <- doc.diffs[id]
+	c := make(chan Commit, 1)
+	if id < len(doc.commits) {
+		c <- doc.commits[id]
 	} else {
 		doc.listeners = append(doc.listeners, c)
 	}
-	return c
+	doc.mu.Unlock()
+	return <- c
 }
 
-func (doc *Doc) putDiff(diff Diff) {
+func (doc *Doc) putCommit(commit Commit) {
 	doc.mu.Lock()
 	defer doc.mu.Unlock()
 	for _, c := range doc.listeners {
-		c <- diff
+		c <- commit
 	}
-	doc.listeners = make([]chan Diff, 0)
-	doc.diffs = append(doc.diffs, diff)
+	doc.listeners = make([]chan Commit, 0)
+	doc.commits = append(doc.commits, commit)
 }
 
 // HANDLERS
 
-func (ps *PadServer) diffPutter(w http.ResponseWriter, r *http.Request) {
+func (ps *PadServer) commitPutter(w http.ResponseWriter, r *http.Request) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	docID := r.PostFormValue("doc-id")
-	diff := Diff(r.PostFormValue("diff"))
+	docID := r.Header.Get("doc-id")
+	commit, _ := ioutil.ReadAll(r.Body)
 	doc, ok := ps.docs[docID]
 	if !ok {
 		ps.docs[docID] = NewDoc(docID)
 		doc = ps.docs[docID]
 	}
-	doc.putDiff(diff)
+	doc.putCommit(Commit(commit))
 }
 
-func (ps *PadServer) diffGetter(ws *websocket.Conn) {
-	var docID string
-	websocket.Message.Receive(ws, &docID)
-	var msg string
-	websocket.Message.Receive(ws, &msg)
-	nextDiff, _ := strconv.Atoi(msg)
-
+func (ps *PadServer) commitGetter(w http.ResponseWriter, r *http.Request) {
+	docID := r.Header.Get("doc-id")
 	ps.mu.Lock()
 	doc, ok := ps.docs[docID]
 	if !ok {
@@ -115,16 +109,9 @@ func (ps *PadServer) diffGetter(ws *websocket.Conn) {
 		doc = ps.docs[docID]
 	}
 	ps.mu.Unlock()
-
-	for {
-		c := doc.getDiff(nextDiff)
-		diff := <-c
-		err := websocket.Message.Send(ws, string(diff))
-		if err != nil {
-			return
-		}
-		nextDiff += 1
-	}
+	nextCommit, _ := strconv.Atoi(r.Header.Get("next-commit"))
+	commit := doc.getCommit(nextCommit)
+	w.Write([]byte(commit))
 }
 
 func (ps *PadServer) docHandler(w http.ResponseWriter, r *http.Request) {
@@ -144,8 +131,8 @@ func nrand() int64 {
 }
 
 func (ps *PadServer) Start() {
-	http.HandleFunc("/diffs/put", ps.diffPutter)
-	http.Handle("/diffs/get", websocket.Handler(ps.diffGetter))
+	http.HandleFunc("/commits/put", ps.commitPutter)
+	http.HandleFunc("/commits/get", ps.commitGetter)
 	http.HandleFunc("/docs/", ps.docHandler)
 	http.Handle("/js/", http.FileServer(http.Dir("./")))
 	http.ListenAndServe(":8080", nil)

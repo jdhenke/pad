@@ -1,13 +1,127 @@
-var express = require('express');
-var router = express.Router();
+// purely functional utility functions for git operations. this file is useable
+// to include in a website or a node application. it defines globally/exports as
+// attributes of the module: getDiff, rebase, applyDiff
 
-/* POST commit, response is merged version */
-router.post('/', function(req, res) {
+// creates diff from a -> b
+function getDiff(a, b) {
 
-  console.log("got here")
+  // perform dynamic program to create diff
+  var memo = {};
 
-  var d1 = req.body.d1
-  var d2 = req.body.d2
+  // dp(i,j) returns operations to transform a[:i] into b[:j]. we return
+  // the actual stored object; do not modify it.
+  var dp = function(i, j) {
+
+    // check if answer is memoized; if so return it
+    var key = i + "," + j;
+    if (key in memo) {
+      return memo[key];
+    }
+
+    // if not compute, store and return it
+    var answer;
+    if (i == 0 && j == 0) {
+      // both documents finished together
+      answer = {type: null, cost: 0};
+    } else {
+      var options = [];
+      if (j > 0) {
+        var insertResult = dp(i, j-1);
+        options.push({
+          type: "Insert",
+          index: i,
+          val: b[j-1],
+          cost: insertResult.cost + 1,
+          last: insertResult,
+        });
+      }
+      if (i > 0) {
+        var deleteResult = dp(i-1, j);
+        options.push({
+          type: "Delete",
+          index: i - 1,
+          size: 1,
+          cost: deleteResult.cost + 1,
+          last: deleteResult,
+        });
+      }
+      if (a[i-1] == b[j-1]) {
+        var sameResult = dp(i-1, j-1);
+        options.push(sameResult);
+      }
+
+      var minOp = options[0];
+      for (var k=1; k < options.length; k += 1) {
+        if (options[k].cost < minOp.cost) {
+          minOp = options[k];
+        }
+      }
+      answer = minOp;
+    }
+
+    memo[key] = answer;
+    return answer;
+  }
+
+  var result = dp(a.length, b.length);
+  var ops = [];
+  while (result.type != null) {
+    var nextResult = result.last;
+    delete result.cost;
+    delete result.last;
+    ops.push(result);
+    result = nextResult;
+  }
+  ops = ops.reverse();
+
+
+  // collapse adjacent
+  if (ops.length == 0) {
+    return []
+  }
+  var diff = [];
+  var runningOp = ops[0];
+  for (var i = 1; i < ops.length; i += 1) {
+    if (runningOp.type == "Insert" &&
+        ops[i].type == "Insert" &&
+        ops[i].index == runningOp.index) {
+      runningOp.val += ops[i].val;
+    } else if (runningOp.type == "Delete" &&
+        ops[i].type == "Delete" &&
+        ops[i].index == runningOp.index + runningOp.size) {
+      runningOp.size += 1;
+    } else {
+      diff.push(runningOp);
+      runningOp = ops[i];
+    }
+  }
+  diff.push(runningOp);
+  return diff;
+}
+
+// returns the result of applying diff to content
+function applyDiff(content, diff) {
+  var index = 0;
+  var output = "";
+  for (var i = 0; i < diff.length; i += 1) {
+    var op = diff[i];
+    output += content.substring(index, op.index);
+    index = op.index
+    if (op.type == "Insert") {
+      output += op.val;
+    } else if (op.type == "Delete") {
+      index += op.size;
+    }
+  }
+  output += content.substring(index, content.length);
+  return output;
+}
+
+// given two diffs to the same document, return a d2' which captures as many of
+// the changes in d2 as possible and can be applied to the document + d1.
+// mutates d2. ensures cursor locations, marked by null characters, are not
+// deleted, but rather maintained into reasonable locations through deletions.
+function rebase(d1, d2) {
 
   // cumulative state as we iterate through with two fingers
   var i = 0;
@@ -94,7 +208,6 @@ router.post('/', function(req, res) {
     j += 1;
   }
 
-  console.log("got here")
   while (i < d1.length && j < d2.length) {
     if (d1[i].index < d2[j].index) {
       if (d1[i].type == "Insert") {
@@ -125,8 +238,13 @@ router.post('/', function(req, res) {
       doNewDelete();
     }
   }
-  res.send(output);
+  return output;
+}
 
-});
-
-module.exports = router;
+if (typeof module !== 'undefined') {
+  module.exports = {
+    getDiff: getDiff,
+    applyDiff: applyDiff,
+    rebase: rebase,
+  };
+}
