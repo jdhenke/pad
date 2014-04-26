@@ -23,7 +23,7 @@ type PadServer struct {
 }
 
 type Doc struct {
-	commits     []Commit
+	commits   []Commit
 	mu        sync.Mutex
 	listeners []chan Commit
 	Id        int64
@@ -37,8 +37,8 @@ type Commit string
 func MakePadServer() *PadServer {
 	ps := &PadServer{}
 	ps.docs = make(map[string]*Doc)
-/*	ps.ppd = MakePersistenceWorker(ps)
-	ps.ppd.Start()*/
+	ps.ppd = MakePersistenceWorker(ps)
+	ps.ppd.Start()
 	return ps
 }
 
@@ -56,6 +56,7 @@ func NewDoc(docID string) *Doc {
 	defer fd.Close()
 	b, _ := json.Marshal(doc)
 	fd.Write(b)
+	fd.Write([]byte("\n"))
 
 	// create doc file on disk
 	os.Create(DOC + strconv.FormatInt(doc.Id, 10) + JSON)
@@ -72,7 +73,7 @@ func (doc *Doc) getCommit(id int) Commit {
 		doc.listeners = append(doc.listeners, c)
 	}
 	doc.mu.Unlock()
-	return <- c
+	return <-c
 }
 
 func (doc *Doc) putCommit(commit Commit) {

@@ -32,7 +32,7 @@ type PadPersistenceWorker struct {
  */
 type PersistentDocData struct {
 	Content string
-	Commits   []Commit
+	Commits []Commit
 }
 
 /*
