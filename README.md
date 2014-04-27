@@ -68,9 +68,11 @@ Should produce something like the following.
 
     $ ./test
     // Spinning up Pad server and two separate clients...
-    client1.setText(message @ 1398467494089)
+    client1.setText(message @ 1398601301557)
     client2.getText() = ""
     // sleeping 1s...
-    client2.getText() = "message @ 1398467494089"
+    client2.getText() = "message @ 1398601301557"
+    Commit Latency for Client 1: 4 (ms)
+    Commit Latency for Client 2: 5 (ms)
 
 See `tester.js` for details.
