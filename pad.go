@@ -20,6 +20,7 @@ type PadServer struct {
 	docs map[string]*Doc
 	mu   sync.Mutex
 	ppd  *PadPersistenceWorker
+	port string
 }
 
 type Doc struct {
@@ -34,9 +35,10 @@ type Commit string
 
 // PAD SERVER
 
-func MakePadServer() *PadServer {
+func MakePadServer(port string) *PadServer {
 	ps := &PadServer{}
 	ps.docs = make(map[string]*Doc)
+	ps.port = port
 	ps.ppd = MakePersistenceWorker(ps)
 	ps.ppd.Start()
 	return ps
@@ -44,7 +46,7 @@ func MakePadServer() *PadServer {
 
 // DOC
 
-func NewDoc(docID string) *Doc {
+func (ps *PadServer) NewDoc(docID string) *Doc {
 	doc := &Doc{}
 	doc.commits = make([]Commit, 1)
 	doc.listeners = make([]chan Commit, 0)
@@ -52,14 +54,14 @@ func NewDoc(docID string) *Doc {
 	doc.Name = docID
 
 	// append document identification data to metadata
-	fd, _ := os.OpenFile(METADATA, os.O_RDWR|os.O_APPEND, 0644)
+	fd, _ := os.OpenFile(METADATA+ps.port+JSON, os.O_RDWR|os.O_APPEND, 0644)
 	defer fd.Close()
 	b, _ := json.Marshal(doc)
 	fd.Write(b)
 	fd.Write([]byte("\n"))
 
 	// create doc file on disk
-	os.Create(DOC + strconv.FormatInt(doc.Id, 10) + JSON)
+	os.Create("./docs" + ps.port + "/" + strconv.FormatInt(doc.Id, 10) + JSON)
 
 	return doc
 }
@@ -95,7 +97,7 @@ func (ps *PadServer) commitPutter(w http.ResponseWriter, r *http.Request) {
 	commit, _ := ioutil.ReadAll(r.Body)
 	doc, ok := ps.docs[docID]
 	if !ok {
-		ps.docs[docID] = NewDoc(docID)
+		ps.docs[docID] = ps.NewDoc(docID)
 		doc = ps.docs[docID]
 	}
 	doc.putCommit(Commit(commit))
@@ -106,7 +108,7 @@ func (ps *PadServer) commitGetter(w http.ResponseWriter, r *http.Request) {
 	ps.mu.Lock()
 	doc, ok := ps.docs[docID]
 	if !ok {
-		ps.docs[docID] = NewDoc(docID)
+		ps.docs[docID] = ps.NewDoc(docID)
 		doc = ps.docs[docID]
 	}
 	ps.mu.Unlock()
@@ -136,10 +138,10 @@ func (ps *PadServer) Start() {
 	http.HandleFunc("/commits/get", ps.commitGetter)
 	http.HandleFunc("/docs/", ps.docHandler)
 	http.Handle("/js/", http.FileServer(http.Dir("./")))
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":"+ps.port, nil)
 }
 
 func main() {
-	ps := MakePadServer()
+	ps := MakePadServer("8080")
 	ps.Start()
 }
