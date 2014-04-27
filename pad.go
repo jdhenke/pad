@@ -7,7 +7,9 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
+	"net/rpc"
 	"os"
+	"paxos"
 	"strconv"
 	"sync"
 	"time"
@@ -17,10 +19,13 @@ var _ = fmt.Printf
 var _ = time.Sleep
 
 type PadServer struct {
-	docs map[string]*Doc
-	mu   sync.Mutex
-	ppd  *PadPersistenceWorker
-	port string
+	docs  map[string]*Doc
+	mu    sync.Mutex
+	ppd   *PadPersistenceWorker
+	peers []string
+	px    *paxos.Paxos
+	me    int
+	port  string
 }
 
 type Doc struct {
@@ -35,10 +40,15 @@ type Commit string
 
 // PAD SERVER
 
-func MakePadServer(port string) *PadServer {
+func MakePadServer(port string, servers []string, me int) *PadServer {
 	ps := &PadServer{}
 	ps.docs = make(map[string]*Doc)
 	ps.port = port
+	rpcs := rpc.NewServer()
+	rpcs.Register(ps)
+
+	ps.px = paxos.Make(servers, me, rpcs)
+
 	ps.ppd = MakePersistenceWorker(ps)
 	ps.ppd.Start()
 	return ps
@@ -142,6 +152,7 @@ func (ps *PadServer) Start() {
 }
 
 func main() {
-	ps := MakePadServer("8080")
+	srvs := make([]string, 0)
+	ps := MakePadServer("8080", srvs, 0)
 	ps.Start()
 }
