@@ -223,7 +223,7 @@ func (px *Paxos) Minquery(args *MinArgs, reply *MinReply) error {
 	return nil
 }
 
-func nrand() int64 {
+func nrand2() int64 {
 	x := rand.Int63()
 	return x
 }
@@ -236,7 +236,7 @@ func nrand() int64 {
 // is reached.
 //
 func (px *Paxos) Start(seq int, val interface{}) {
-	v := Proposition{nrand(), val}
+	v := Proposition{nrand2(), val}
 
 	//proposer
 	go func(seq int, v Proposition) {
