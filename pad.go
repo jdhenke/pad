@@ -140,5 +140,7 @@ func (ps *PadServer) Start() {
 
 func main() {
 	ps := MakePadServer()
+	fmt.Println("server started"); // necessary for testing client
 	ps.Start()
+
 }

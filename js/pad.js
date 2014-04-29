@@ -123,4 +123,16 @@ function Pad(params) {
     document.dispatchEvent(evt);
   };
 
+  this.pause = function() {
+    worker.postMessage({
+      type: "pause",
+    });
+  }
+
+  this.play = function() {
+    worker.postMessage({
+      type: "play",
+    });
+  }
+
 }

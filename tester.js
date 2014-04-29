@@ -1,81 +1,232 @@
-// simple example illustrating the delay of commits in pad using a PhantomJS
-// with multiple headless browser clients.
+// end-to-end correctness testing
 
-// entry point for our example
+// helpful tool for chaining callback functions
+var async = require('async');
+
+// main entry point - start the go server and run the tests one by one, failing
+// immediately if any of them fail.
 function main() {
-
-  console.log("// Spinning up Pad server and two separate clients...");
-
-  // spawn our pad server. It's built then run as its own process because if you
-  // just call `go run pad.go`, phantom.exit() doesn't actually kill the server
-  // process, it kills what looks like the outer process which presumably
-  // compiles and calls the temporary built pad object. now, the go server
-  // process is a direct child process of this tester, so exiting the tester
-  // kills the server as well.
-  require("child_process")
-    .spawn("go", ["build",
-                  "pad.go",
-                  "persistenceWorker.go"])
-    .on("exit", function() {
-      require("child_process").spawn("./pad", []);
+  require("child_process").spawn("./pad", []).stdout.on('data', function() {
+    async.series([
+      testSingleWriter,
+      testSerializedMultipleWriters,
+      testConcurrentNoConflicts,
+      // testConcurrentConflictingWrites,
+      // testRandom,
+    ], function(err, results) {
+      if (err) {
+        console.log("FAIL: ", err);
+        phantom.exit(1);
+      } else {
+        console.log("PASS")
+        phantom.exit(0);
+      }
     });
-
-  // setup the clients
-  var docID = "test-id",
-      url   = "http://localhost:8080/docs/";
-  setTimeout(function() { // needed for pad servers to launch
-    var c1 = new PadClient(url, docID);
-    setTimeout(function() { // not sure why this is necessary...
-      var c2 = new PadClient(url, docID);
-      setTimeout(function() { // not sure why this is necessary...
-        // setup event listeners to record latency of commits
-        var registerListeners = function() {
-          document.addEventListener("pad:commit-sent", function() {
-            window.commitSentTime = + new Date();
-          });
-          document.addEventListener("pad:commit-applied", function() {
-            window.commitAppliedTime = + new Date();
-          });
-        };
-        c1.evaluate(registerListeners);
-        c2.evaluate(registerListeners);
-        // perform a commit on client 1 and see how quickly it propagates
-        var text = "message @ " + (+ new Date());
-        console.log("client1.setText(" + text + ")");
-        c1.setText(text);
-        console.log("client2.getText() = \"" + c2.getText() + '"');
-        console.log("// sleeping 100ms...")
-        setTimeout(function() { // wait for commit to propagate
-          console.log('client2.getText() = "' + c2.getText() + '"');
-          var sentTime = c1.evaluate(function() {
-            return window.commitSentTime;
-          });
-          var c1ApplyTime = c1.evaluate(function() {
-            return window.commitAppliedTime;
-          });
-          var c2ApplyTime = c2.evaluate(function() {
-            return window.commitAppliedTime;
-          });
-          // display commit latency. NOTE: this is the time which it takes the
-          // commit to propagate through the entire system to a clicent. So
-          // Client 1's state actually reflects the state just *before* the
-          // commit time, but this is measuring propagation of the commit to
-          // each client through the system.
-          console.log("Commit Latency for Client 1:",
-                      c1ApplyTime - sentTime, "(ms)");
-          console.log("Commit Latency for Client 2:",
-                      c2ApplyTime - sentTime, "(ms)");
-          phantom.exit();
-        }, 100);
-      }, 1000);
-    }, 500);
-  }, 1000);
+  });
 }
+
+// spawns numClients PadClient objects. calls ret(err, clients)
+function spawnClients(numClients, ret) {
+
+  // new doc ID to separate tests from eachother
+  var docID = "testing-id-" + (+ new Date());
+
+  // keeps trying to create a pad client and calls cb(client) when done.
+  function spawnClient(cb) {
+    var url = "http://localhost:8080/docs";
+    var client = new PadClient(url, docID, function(err, data) {
+      if (err == null) {
+        cb(null, client);
+      } else {
+        // this is the error case. this could happen because PhantomJS is weird.
+        // if that's the case, simply toss this client and try, try again.
+        client.close();
+        spawnClient(cb);
+      }
+    });
+  };
+
+  // assemble list of tasks where each is to spawn a client
+  var tasks = [];
+  for (var i = 0; i < numClients; i += 1) {
+    tasks.push(spawnClient);
+  }
+
+  // execute that task. assign clients to this chain's context
+  var that = this;
+  // parallel doesn't work for some reason... see
+  // https://github.com/ariya/phantomjs/issues/11408. so this would be better
+  // written as a normal iteration, but maybe one day parallel creation of
+  // clients will work...
+  async.series(tasks, function(err, results) {
+    that.clients = results;
+    ret(err, results);
+  });
+
+};
+
+// test case where there are multiple clients. only the first client writes
+// anything, and after each write, the test waits for the commit to propagate
+// then checks that every client has the same state, which is text which the
+// first client most recently committed.
+function testSingleWriter(ret) {
+
+  console.log("Testing: serialized writes, single writer");
+
+  var numClients = 10,
+      numChecks = 10,
+      pause = 200;
+
+  spawnClients(numClients, function(err, clients) {
+    var doCheck = function() {
+      text = "testing @ " + (+ new Date());
+      clients[0].setText(text);
+      setTimeout(function() {
+        for (var i = 0; i < numClients; i += 1) {
+          var clientText = clients[i].getText();
+          if (clientText !== text) {
+            ret("client " + i + " had " + clientText + ", not " + text);
+            return;
+          }
+        }
+        numChecks -= 1;
+        if (numChecks > 0) {
+          doCheck();
+        } else {
+          // cleanup clients
+          for (var i = 0; i < numClients; i += 1) {
+            clients[i].close();
+          }
+          // finally return success
+          ret(null, 'success');
+        }
+      }, pause);
+    };
+    doCheck();
+  });
+
+};
+
+// same as testSingleWriter, except at each round, a different client writes.
+function testSerializedMultipleWriters(ret) {
+
+  console.log("Testing: serialized writes, multiple writers");
+
+  var numClients = 10,
+      numChecks = 10, // should be the same as numClients
+      pause = 100;
+
+  spawnClients(numClients, function(err, clients) {
+    var doCheck = function() {
+      text = "testing @ " + (+ new Date());
+      clients[numChecks - 1].setText(text);
+      setTimeout(function() {
+        for (var i = 0; i < numClients; i += 1) {
+          var clientText = clients[i].getText();
+          if (clientText !== text) {
+            ret("client " + i + " had " + clientText + ", not " + text);
+          }
+        }
+        numChecks -= 1;
+        if (numChecks > 0) {
+          doCheck();
+        } else {
+          // cleanup clients
+          for (var i = 0; i < numClients; i += 1) {
+            clients[i].close();
+          }
+          // finally return success
+          ret(null, 'success');
+        }
+      }, pause);
+    };
+    doCheck();
+  });
+
+};
+
+// in this test, multiple clients write concurrent but non-conflicting updates.
+// this is made explicit by first pausing all clients, setting their text, then
+// unpausing them so the changes can propagate, waiting for them to propagate,
+// then testing to ensure all clients have the same state.
+function testConcurrentNoConflicts(ret) {
+
+  console.log("Testing concurrent, nonconflicting writers");
+
+  var numClients = 10,
+      numChecks = 10, // should be the same as numClients
+      pause = 500; // requires much longer wait due to rebasing
+
+  spawnClients(numClients, function(err, clients) {
+    var doCheck = function() {
+      // pause clients so they don't immediately propagate their changes.
+      clients.forEach(function(client) {
+        client.pause();
+      });
+      // have each client make changes. since they are paused, it is as if they
+      // are all happening at the same time. record what their text should be to
+      // double check their text has not progressed.
+      var expectedTexts = [];
+      clients.forEach(function(client, i) {
+        var text = client.getText();
+        var lines = text.split("\n");
+        lines[i] += i;
+        var newText = lines.join("\n");
+        expectedTexts.push(newText);
+        client.setText(newText);
+      });
+      // unpause each client, first check to make sure their current text hasn't
+      // changed. if it had, then pause is not working correctly.
+      clients.forEach(function(client, i) {
+        var text = client.getText();
+        if (text !== expectedTexts[i]) {
+          ret("client " + i + " jumped: " + expectedTexts[i] + " to " + text);
+          return;
+        }
+        client.play();
+      });
+      // wait for all changes to propagate
+      setTimeout(function() {
+        // use the text of the first client as a starting point, but really they
+        // just all need to be the same.
+        var text = clients[0].getText();
+        for (var i = 0; i < numClients; i += 1) {
+          var clientText = clients[i].getText();
+          if (clientText !== text) {
+            ret("client " + i + " had " + clientText + ", not " + text);
+            return;
+          }
+        }
+        numChecks -= 1;
+        if (numChecks > 0) {
+          doCheck();
+        } else {
+          // cleanup clients
+          for (var i = 0; i < numClients; i += 1) {
+            clients[i].close();
+          }
+          // finally return success
+          ret(null, 'success');
+        }
+      }, pause);
+    };
+    // the state will be a line per client, and each client only modifies its
+    // line. this way, no updates are conflicting.
+    var startStateArray = [];
+    while (startStateArray.length < numClients - 1) {
+      startStateArray.push("\n");
+    }
+    var startState = startStateArray.join("");
+    clients[0].setText(startState);
+    setTimeout(doCheck, pause);
+  });
+
+};
 
 // class which abstracts the notion of a pad client. encapsulates the details of
 // creating a headless client, loading the page and instantiating a tester
 // Javascript Pad client object.
-function PadClient(url, docID) {
+function PadClient(url, docID, cb) {
 
   // initialize testing pad client at url and doc ID
   var page = require('webpage').create();
@@ -84,7 +235,7 @@ function PadClient(url, docID) {
   };
   page.open(url, function(success) {
     if (success !== 'success') {
-      throw "Failed to open webpage."
+      cb("Failed to open webpage.")
     }
     page.evaluate(function(docID) {
       // define bind; apparently PhantomJS doesn't support this?
@@ -131,6 +282,7 @@ function PadClient(url, docID) {
       });
       window.pad = pad;
     }, docID);
+    cb();
   });
 
   // executes f on the webpage
@@ -154,7 +306,22 @@ function PadClient(url, docID) {
       pad.tryCommit();
     }, newText);
   }
+
+  this.pause = function() {
+    page.evaluate(function() {
+      pad.pause();
+    });
+  }
+
+  this.play = function() {
+    page.evaluate(function() {
+      pad.play();
+    });
+  }
+
+  this.close = function() {
+    page.close();
+  }
 }
 
-// kick things off
 main();
