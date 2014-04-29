@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	/*	DOC          = "./docs/"*/
 	JSON         = ".json"
 	METADATA     = "metadata"
 	WAITINTERVAL = 5 * time.Second
