@@ -11,8 +11,8 @@ function main() {
       testSingleWriter,
       testSerializedMultipleWriters,
       testConcurrentNoConflicts,
-      // testConcurrentConflictingWrites,
-      // testRandom,
+      testConcurrentConflicts,
+      testRandom,
     ], function(err, results) {
       if (err) {
         console.log("FAIL: ", err);
@@ -75,7 +75,7 @@ function testSingleWriter(ret) {
 
   var numClients = 10,
       numChecks = 10,
-      pause = 200;
+      pause = 100;
 
   spawnClients(numClients, function(err, clients) {
     var doCheck = function() {
@@ -151,7 +151,7 @@ function testSerializedMultipleWriters(ret) {
 // then testing to ensure all clients have the same state.
 function testConcurrentNoConflicts(ret) {
 
-  console.log("Testing concurrent, nonconflicting writers");
+  console.log("Testing: concurrent, nonconflicting writers");
 
   var numClients = 10,
       numChecks = 10, // should be the same as numClients
@@ -222,6 +222,152 @@ function testConcurrentNoConflicts(ret) {
   });
 
 };
+
+// this tests many client making concurrent updates, made to be explictly
+// conflicting via pause/play.
+function testConcurrentConflicts(ret) {
+
+  console.log("Testing: concurrent, conflicting writers");
+
+  var numClients = 10,
+      numChecks = 10, // should be the same as numClients
+      pause = 2000; // requires much longer wait due to rebasing
+
+  spawnClients(numClients, function(err, clients) {
+    var doCheck = function() {
+      // pause clients so they don't immediately propagate their changes.
+      clients.forEach(function(client) {
+        client.pause();
+      });
+      // have each client make changes. since they are paused, it is as if they
+      // are all happening at the same time. record what their text should be to
+      // double check their text has not progressed.
+      var expectedTexts = [];
+      clients.forEach(function(client, i) {
+        var text = client.getText();
+        var lines = text.split("\n");
+        // adjust lines within a range, so overlap with other clients conflict.
+        lines[i] += i;
+        if (i + 1 < lines.length) {
+          lines[i + 1] += i;
+        } else if (i - 1 >= 0) {
+          lines[i - 1] += i;
+        }
+        var newText = lines.join("\n");
+        expectedTexts.push(newText);
+        client.setText(newText);
+      });
+      // unpause each client, first check to make sure their current text hasn't
+      // changed. if it had, then pause is not working correctly.
+      clients.forEach(function(client, i) {
+        var text = client.getText();
+        if (text !== expectedTexts[i]) {
+          ret("client " + i + " jumped: " + expectedTexts[i] + " to " + text);
+          return;
+        }
+        client.play();
+      });
+      // wait for all changes to propagate
+      setTimeout(function() {
+        // use the text of the first client as a starting point, but really they
+        // just all need to be the same.
+        var text = clients[0].getText();
+        for (var i = 0; i < numClients; i += 1) {
+          var clientText = clients[i].getText();
+          if (clientText !== text) {
+            ret("client " + i + " had " + clientText + ", not " + text);
+            return;
+          }
+        }
+        numChecks -= 1;
+        if (numChecks > 0) {
+          doCheck();
+        } else {
+          // cleanup clients
+          for (var i = 0; i < numClients; i += 1) {
+            clients[i].close();
+          }
+          // finally return success
+          ret(null, 'success');
+        }
+      }, pause);
+    };
+    // the state will be a line per client, and each client only modifies its
+    // line. this way, no updates are conflicting.
+    var startStateArray = [];
+    while (startStateArray.length < numClients - 1) {
+      startStateArray.push("\n");
+    }
+    var startState = startStateArray.join("");
+    clients[0].setText(startState);
+    setTimeout(doCheck, pause);
+  });
+}
+
+// tests in bursts of 5s on, 5s off, making random, concurrent, potentially
+// conflicting edits. after the 5s off, consistency amongst all clients is
+// confirmed.
+function testRandom(ret) {
+
+  console.log("Testing: random concurrent updates...");
+
+  var numClients = 10,
+      numChecks = 10, // should be the same as numClients
+      period = 20, // requires much longer wait due to rebasing
+      docSize = 20;
+
+  function doRound(clients, done) {
+    // 5s of doing work
+    (function doLoop() {
+      clients.forEach(function(client) {
+        client.pause();
+      })
+      clients.forEach(function(client, index) {
+        var text = client.getText();
+        if (text.length < docSize) {
+          // do insert
+          var toInsert = "" + parseInt(Math.random() * numClients);
+          var i = parseInt(Math.random() * text.length);
+          var newText = text.substring(0, i) + toInsert + text.substring(i);
+          client.setText(newText);
+        } else {
+          var i = parseInt(Math.random() * text.length);
+          var j = i + parseInt(3 * Math.random());
+          var newText = text.substring(0, i) + text.substring(j);
+          client.setText(newText);
+        }
+      });
+      clients.forEach(function(client) {
+        client.play();
+      })
+      setTimeout(function() {
+        var text = clients[0].getText();
+        for (var i = 0; i < numClients; i += 1) {
+          var clientText = clients[i].getText();
+          if (clientText !== text) {
+            ret("client " + i + " had \n" + clientText + "\n\tnot\n" + text);
+            return;
+          }
+        }
+        done();
+      }, period)
+    })();
+  }
+
+  spawnClients(numClients, function(err, clients) {
+    var check = 0;
+    function checkDoRound() {
+      if (check < numChecks) {
+        check += 1
+        doRound(clients, checkDoRound);
+      } else {
+        ret();
+      }
+    }
+    checkDoRound();
+  });
+
+}
 
 // class which abstracts the notion of a pad client. encapsulates the details of
 // creating a headless client, loading the page and instantiating a tester
