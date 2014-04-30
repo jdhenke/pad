@@ -63,21 +63,20 @@ Should produce something like the following:
 
 ### PhantomJS Example Tester
 
-To run an example of how PhantomJS can be used to simulate multiple clients at the same time and that illustrates the latency of a commit, ensure your PhantomJS is installed (`npm install`) and do the following.
-
+To run the end to end testing suite locally, do the following.
 ```bash
 ./test
 ```
 
 Should produce something like the following.
 
-    $ ./test
-    // Spinning up Pad server and two separate clients...
-    client1.setText(message @ 1398601301557)
-    client2.getText() = ""
-    // sleeping 1s...
-    client2.getText() = "message @ 1398601301557"
-    Commit Latency for Client 1: 4 (ms)
-    Commit Latency for Client 2: 5 (ms)
+    $ rm -rf docs* metadata*; ./test
+    Testing: serialized writes, single writer
+    Testing: serialized writes, multiple writers
+    Testing: concurrent, nonconflicting writers
+    Testing: concurrent, conflicting writers
+    Testing: random concurrent updates...
+    PASS
 
-See `tester.js` for details.
+If it fails, try increasing the timeouts before checking for consistency in each test case.
+The testing code isn't very DRY as well as requires fine tuning these timeouts by hand; but it does work, so that's cool.
