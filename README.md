@@ -28,8 +28,13 @@ It uses PhantomJS to simulate many clients, testing for eventual consistency amo
 
 ### Pad Server
 
+To Run:
 ```bash
-go run pad.go persistenceWorker.go
+go run p*.go
+```
+Cleanup:
+```bash
+rm -rf docs* metadata*
 ```
 
 Visit [http://localhost:8080/docs/DocID](http://localhost:8080/docs/DocID). Change `DocID` to get a different document.

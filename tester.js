@@ -31,9 +31,14 @@ function spawnClients(numClients, ret) {
   // new doc ID to separate tests from eachother
   var docID = "testing-id-" + (+ new Date());
 
+  // offset from 8080 so clients are evenly distributed across paxos peers
+  var portDelta = 0;
+
   // keeps trying to create a pad client and calls cb(client) when done.
   function spawnClient(cb) {
-    var url = "http://localhost:8080/docs";
+    portDelta = (portDelta + 1) % 3 // TODO: adjust to be num servers
+    var port = 8080 + portDelta;
+    var url = "http://localhost:" + port + "/docs";
     var client = new PadClient(url, docID, function(err, data) {
       if (err == null) {
         cb(null, client);
@@ -75,7 +80,7 @@ function testSingleWriter(ret) {
 
   var numClients = 10,
       numChecks = 10,
-      pause = 100;
+      pause = 500;
 
   spawnClients(numClients, function(err, clients) {
     var doCheck = function() {
@@ -114,7 +119,7 @@ function testSerializedMultipleWriters(ret) {
 
   var numClients = 10,
       numChecks = 10, // should be the same as numClients
-      pause = 100;
+      pause = 500;
 
   spawnClients(numClients, function(err, clients) {
     var doCheck = function() {
@@ -154,8 +159,8 @@ function testConcurrentNoConflicts(ret) {
   console.log("Testing: concurrent, nonconflicting writers");
 
   var numClients = 10,
-      numChecks = 10, // should be the same as numClients
-      pause = 500; // requires much longer wait due to rebasing
+      numChecks = 1, // should be <= numClients
+      pause = 10000; // requires much longer wait due to rebasing
 
   spawnClients(numClients, function(err, clients) {
     var doCheck = function() {
@@ -230,8 +235,8 @@ function testConcurrentConflicts(ret) {
   console.log("Testing: concurrent, conflicting writers");
 
   var numClients = 10,
-      numChecks = 10, // should be the same as numClients
-      pause = 2000; // requires much longer wait due to rebasing
+      numChecks = 1, // should be <= numClients
+      pause = 10000; // requires much longer wait due to rebasing
 
   spawnClients(numClients, function(err, clients) {
     var doCheck = function() {
@@ -311,9 +316,9 @@ function testRandom(ret) {
 
   console.log("Testing: random concurrent updates...");
 
-  var numClients = 10,
-      numChecks = 10, // should be the same as numClients
-      period = 20, // requires much longer wait due to rebasing
+  var numClients = 5,
+      numChecks = 1, // should <= numClients
+      period = 10000, // requires much longer wait due to rebasing
       docSize = 20;
 
   function doRound(clients, done) {

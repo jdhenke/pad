@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	DOC          = "./docs/"
 	JSON         = ".json"
-	METADATA     = "metadata.json"
+	METADATA     = "metadata"
 	WAITINTERVAL = 5 * time.Second
 )
 
@@ -32,7 +31,7 @@ type PadPersistenceWorker struct {
  */
 type PersistentDocData struct {
 	Content string
-	Commits   []Commit
+	Commits []Commit
 }
 
 /*
@@ -44,8 +43,8 @@ func MakePersistenceWorker(server *PadServer) *PadPersistenceWorker {
 	ppd := PadPersistenceWorker{}
 	ppd.ps = server
 
-	if ok, _ := exists("./docs/"); !ok {
-		os.Mkdir("docs", os.ModePerm) // set to permissions 0777, this should change
+	if ok, _ := exists("./docs" + server.port + "/"); !ok {
+		os.Mkdir("docs"+server.port, os.ModePerm) // set to permissions 0777, this should change
 	}
 
 	ppd.loadAllDocs()
@@ -74,8 +73,8 @@ func (ppd *PadPersistenceWorker) loadDoc(doc *Doc) *PersistentDocData {
  * this function sets up the environment to start using persistent state.
  */
 func (ppd *PadPersistenceWorker) loadAllDocs() {
-	if ok, _ := exists(METADATA); ok {
-		metaDataFile, _ := os.Open(METADATA)
+	if ok, _ := exists(METADATA + ppd.ps.port + JSON); ok {
+		metaDataFile, _ := os.Open(METADATA + ppd.ps.port + JSON)
 		defer metaDataFile.Close()
 		r := bufio.NewReader(metaDataFile)
 		for line, _, err := r.ReadLine(); err != io.EOF; line, _, err = r.ReadLine() {
@@ -87,7 +86,7 @@ func (ppd *PadPersistenceWorker) loadAllDocs() {
 		}
 		fmt.Println("Docs read from metaData: ", ppd.ps.docs)
 	} else {
-		fd, _ := os.Create(METADATA)
+		fd, _ := os.Create(METADATA + ppd.ps.port + JSON)
 		fd.Close()
 	}
 }
@@ -138,7 +137,7 @@ func (ppd *PadPersistenceWorker) syncAllDocs() {
  * Yields path to a Doc's PadPersistentData
  */
 func (ppd *PadPersistenceWorker) pathForDoc(doc *Doc) string {
-	return DOC + strconv.FormatInt(doc.Id, 10) + JSON
+	return "./docs" + ppd.ps.port + "/" + strconv.FormatInt(doc.Id, 10) + JSON
 }
 
 /*
