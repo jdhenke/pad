@@ -36,24 +36,14 @@ npm install
 
 ## Running Locally
 
-Use `configs/local.txt` which contains something like this:
-
-    127.0.0.1:7080
-    127.0.0.1:7081
-    127.0.0.1:7082
-
-Each line is `127.0.0.1:<port>` when running locally. See the next section for running remotely.
-
-To run, simply do the following:
-
 ```bash
-./driver configs/local.txt
+./driver configs/local.json
 ```
 
-**NOTE**: They are communicating with each other on the ports specificied in the file.
+**NOTE**: They are communicating with each other on the ports specified in the file.
 To view the webpage, simply go to any pad server on the port **1000 higher** than the port in the config file.
 
-For `configs/local.txt`, visit any of:
+Then you can visit any of:
 
 * [http://localhost:8080/docs/DocID](http://localhost:8080/docs/DocID),
 * [http://localhost:8081/docs/DocID](http://localhost:8081/docs/DocID)
@@ -63,7 +53,17 @@ Change `DocID` to get a different document.
 
 ## Running on AWS
 
-TODO: how to specify pem files?
+Talk w/ Joe to get his identity file and put it in `./keys`. Then run:
+
+```bash
+./driver configs/aws.json
+```
+
+Then you can visit any of:
+
+  * [http://54.187.189.229:8080/docs/DocID](http://54.187.189.229:8080/docs/DocID)
+  * [http://54.187.189.229:8081/docs/DocID](http://54.187.189.229:8081/docs/DocID)
+  * [http://54.187.189.229:8082/docs/DocID](http://54.187.189.229:8082/docs/DocID)
 
 ## Unit Testing
 

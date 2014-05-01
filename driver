@@ -9,7 +9,7 @@ var configPath = process.argv[2];
 var simpleConfigPath = configPath + ".txt";
 
 // load in configuration, which is just an array of peers
-var peers = require(configPath);
+var peers = require(require("path").resolve(configPath));
 
 // create a simple text file for go to use
 var simpleConfig = [];
@@ -30,7 +30,10 @@ peers.forEach(function(peer, index) {
 
 // servers will be local, so just call go right now
 function runLocal(peer, index) {
-  spawn("go", ["run", "server/server.go", simpleConfigPath, index]);
+  var p = spawn("go", ["run", "server/server.go", simpleConfigPath, index]);
+  p.stdout.on("data", function(data) {
+    console.log(data.toString().trim());
+  });
 }
 
 // servers are remote, so copy the files and run things remotely
@@ -43,8 +46,8 @@ function runRemote(peer, index) {
               peer.identityFile];
   var p = spawn("./run-remote.sh", args);
   p.stdout.on("data", function(data) {
-    console.log(data.toString());
+    console.log(data.toString().trim());
   });
 }
 
-console.log("running...")
+console.log("spinning up pad servers now...")

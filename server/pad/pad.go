@@ -282,8 +282,12 @@ func MakePadServer(peers []string, me int) *PadServer {
 	gob.Register(PutArgs{})
 	gob.Register(GetArgs{})
 	ps.docs = make(map[string]*Doc)
-	rpcPort, _ := strconv.Atoi(strings.Split(peers[me], ":")[1])
+	url := strings.Split(peers[me], ":")
+	ip := url[0]
+	rpcPortString := url[1]
+	rpcPort, _ := strconv.Atoi(rpcPortString)
 	ps.port = strconv.Itoa(rpcPort + 1000)
+	fmt.Printf("serving pad webpage on %v:%v\n", ip, ps.port)
 	rpcs := rpc.NewServer()
 
 	ps.px = MakePaxosInstance(peers, me, rpcs)
@@ -297,13 +301,10 @@ func MakePadServer(peers []string, me int) *PadServer {
 	ps.unreliable = false
 	ps.dead = false
 
-	rpcPortString := strconv.Itoa(rpcPort)
-
 	l, e := net.Listen("tcp", ":" + rpcPortString)
 	if e != nil {
 		log.Fatal("listen error: ", e)
 	}
-	fmt.Printf("listening on %v\n", peers[me])
 	ps.l = l
 
 	// please do not change any of the following code,

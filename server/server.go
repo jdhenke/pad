@@ -16,7 +16,6 @@ func main() {
 	} else {
 		me, _ := strconv.Atoi(os.Args[2])
 		fname := os.Args[1]
-		fmt.Printf("Using line %v in config file: %v\n", me, fname)
 		if data, err := ioutil.ReadFile(fname); err == nil {
 			peers := strings.Split(strings.TrimSpace(string(data)), "\n")
 			server := pad.MakePadServer(peers, me)
