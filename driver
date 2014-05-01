@@ -22,7 +22,29 @@ fs.writeFileSync(simpleConfigPath, simpleConfigData)
 // spin up each peer
 peers.forEach(function(peer, index) {
   if (peer.ip == "127.0.0.1") {
-    spawn("go", ["run", "server/server.go", simpleConfigPath, index]);
+    runLocal(peer, index);
+  } else {
+    runRemote(peer, index);
   }
 });
+
+// servers will be local, so just call go right now
+function runLocal(peer, index) {
+  spawn("go", ["run", "server/server.go", simpleConfigPath, index]);
+}
+
+// servers are remote, so copy the files and run things remotely
+function runRemote(peer, index) {
+  var args = [peer.ip,
+              peer.port,
+              peer.user,
+              simpleConfigPath,
+              index,
+              peer.identityFile];
+  var p = spawn("./run-remote.sh", args);
+  p.stdout.on("data", function(data) {
+    console.log(data.toString());
+  });
+}
+
 console.log("running...")

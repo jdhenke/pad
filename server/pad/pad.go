@@ -297,7 +297,9 @@ func MakePadServer(peers []string, me int) *PadServer {
 	ps.unreliable = false
 	ps.dead = false
 
-	l, e := net.Listen("tcp", peers[me])
+	rpcPortString := strconv.Itoa(rpcPort)
+
+	l, e := net.Listen("tcp", ":" + rpcPortString)
 	if e != nil {
 		log.Fatal("listen error: ", e)
 	}

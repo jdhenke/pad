@@ -515,7 +515,6 @@ func (px *Paxos) Kill() {
 // are in peers[]. this servers port is peers[me].
 //
 func MakePaxosInstance(peers []string, me int, rpcs *rpc.Server) *Paxos {
-	fmt.Println("hello! ")
 	px := &Paxos{}
 	px.peers = peers
 	px.me = me
