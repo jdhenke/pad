@@ -40,7 +40,7 @@ npm install
 ./driver configs/local.json
 ```
 
-**NOTE**: They are communicating with each other on the ports specified in the file.
+**NOTE: ** They are communicating with each other on the ports specified in the file.
 To view the webpage, simply go to any pad server on the port **1000 higher** than the port in the config file.
 
 Then you can visit any of:
@@ -64,6 +64,12 @@ Then you can visit any of:
   * [http://54.187.189.229:8080/docs/DocID](http://54.187.189.229:8080/docs/DocID)
   * [http://54.187.189.229:8081/docs/DocID](http://54.187.189.229:8081/docs/DocID)
   * [http://54.187.189.229:8082/docs/DocID](http://54.187.189.229:8082/docs/DocID)
+
+**NOTE:** The pad servers will keep going on the remote machines if you kill the local `driver`. To stop them, `ssh` in and run the following:
+
+```bash
+kill -s 9 `ps -x | grep server | grep -iv grep | awk '{print $1}' | xargs`
+```
 
 ## Unit Testing
 
