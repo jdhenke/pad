@@ -16,6 +16,7 @@ var state = {
   pendingUpdates: [],
   isUpdating: false,
   docID: null,
+  paused: false,
 };
 
 // commits diff from headText to newText and sends it to the server.
@@ -66,8 +67,9 @@ function startContinuousPull() {
 // pops the next one off and ensures it is eventually pushed the UI.
 function tryNextUpdate() {
 
-  // ignore if in the middle of an update or there are no updates to apply
-  if (state.isUpdating || state.pendingUpdates.length == 0) {
+  // ignore if in the middle of an update or there are no updates to apply or
+  // this client is paused.
+  if (state.isUpdating || state.pendingUpdates.length == 0 || state.paused) {
     return;
   }
 
@@ -242,5 +244,10 @@ onmessage = function(evt) {
         type: "get-live-state",
       });
     }
+  } else if (data.type == "pause") {
+    state.paused = true;
+  } else if (data.type == "play") {
+    state.paused = false;
+    tryNextUpdate();
   }
 };

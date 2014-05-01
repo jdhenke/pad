@@ -54,7 +54,12 @@ node_modules
 
 .DS_Store
 
-# ignore state
-docs*
-metadata*
+# compiled pad server
+pad
 
+# data
+metadata*.json
+docs*
+
+# aws passkeys
+*.pem

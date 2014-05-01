@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"strconv"
+	"fmt"
 )
 
 func port(tag string, host int) string {
@@ -39,5 +40,6 @@ func main() {
 	for i := 1; i < nservers; i++ {
 		go kva[i].Start()
 	}
+	fmt.Println("server started"); // necessary for testing client
 	kva[0].Start()
 }
