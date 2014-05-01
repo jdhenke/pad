@@ -1,19 +1,28 @@
 #!/usr/bin/env node
 
+// require necessary packages
 var fs = require("fs");
 var spawn = require("child_process").spawn
 
-var fname = process.argv[2];
+// setup file path names
+var configPath = process.argv[2];
+var simpleConfigPath = configPath + ".txt";
 
-fs.readFile(fname, 'utf-8', function(err, data) {
-  if (err) throw err;
-  var lines = data.trim().split('\n');
-  lines.forEach(function(line, index) {
-    if (line.indexOf("127.0.0.1:") == 0) {
-      spawn("go", ["run", "server/server.go", fname, index]);
-    } else {
-      // TODO: copy all necessary files to remote client
-    }
-  });
-  console.log("running...")
+// load in configuration, which is just an array of peers
+var peers = require(configPath);
+
+// create a simple text file for go to use
+var simpleConfig = [];
+peers.forEach(function(peer) {
+  simpleConfig.push(peer.ip + ":" + peer.port);
 });
+var simpleConfigData = simpleConfig.join("\n");
+fs.writeFileSync(simpleConfigPath, simpleConfigData)
+
+// spin up each peer
+peers.forEach(function(peer, index) {
+  if (peer.ip == "127.0.0.1") {
+    spawn("go", ["run", "server/server.go", simpleConfigPath, index]);
+  }
+});
+console.log("running...")
