@@ -60,3 +60,6 @@ pad
 # data
 metadata*.json
 docs*
+
+# aws passkeys
+*.pem
