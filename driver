@@ -1,0 +1,19 @@
+#!/usr/bin/env node
+
+var fs = require("fs");
+var spawn = require("child_process").spawn
+
+var fname = process.argv[2];
+
+fs.readFile(fname, 'utf-8', function(err, data) {
+  if (err) throw err;
+  var lines = data.trim().split('\n');
+  lines.forEach(function(line, index) {
+    if (line.indexOf("127.0.0.1:") == 0) {
+      spawn("go", ["run", "server/server.go", fname, index]);
+    } else {
+      // TODO: copy all necessary files to remote client
+    }
+  });
+  console.log("running...")
+});

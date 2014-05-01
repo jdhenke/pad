@@ -24,53 +24,65 @@ Concurrent edits are resolved through git style rebasing with automatic conflict
 In addition to the system itself, this repo includes its testing infrastructure.
 It uses PhantomJS to simulate many clients, testing for eventual consistency amongst clients as well as latency in normal conditions and under failures.
 
-## Usage
+## Installation
 
-### Pad Server
-
-To Run:
-```bash
-go run p*.go
-```
-Cleanup:
-```bash
-rm -rf docs* metadata*
-```
-
-Visit [http://localhost:8080/docs/DocID](http://localhost:8080/docs/DocID). Change `DocID` to get a different document.
-
-### Go Client/Node Server Example
-
-To run the node server and a sample go client, do the following
+Make sure you have `go 1.2` and `node v0.10.3` installed.
 
 ```bash
-node app.js 7000 & pid=$! ; go run client.go ; kill -s 9 $pid
+git clone https://github.com/jdhenke/pad.git
+cd pad
+npm install
 ```
 
-Should produce something like the following:
+## Running Locally
 
+Use `configs/local.txt` which contains something like this:
 
-    $ node app.js & pid=$! ; go run client.go ; kill -s 9 $pid
-    [1] 14913
-    Start: "joe henke"
-    User A: "joseph henke"
-    User B: "joe dalton henke"
-    Rebasing B's changes onto A's reveals this progression:
-    	 "joe henke"
-    	 "joseph henke"
-    	 "joseph dalton henke"
-    [1]+  Killed: 9               node app.js
+    127.0.0.1:7080
+    127.0.0.1:7081
+    127.0.0.1:7082
 
-### PhantomJS Example Tester
+Each line is `127.0.0.1:<port>` when running locally. See the next section for running remotely.
 
-To run the end to end testing suite locally, do the following.
+To run, simply do the following:
+
 ```bash
-./test
+./driver configs/local.txt
 ```
 
-Should produce something like the following.
+**NOTE**: They are communicating with each other on the ports specificied in the file.
+To view the webpage, simply go to any pad server on the port **1000 higher** than the port in the config file.
 
-    $ rm -rf docs* metadata*; ./test
+For `configs/local.txt`, visit any of:
+
+* [http://localhost:8080/docs/DocID](http://localhost:8080/docs/DocID),
+* [http://localhost:8081/docs/DocID](http://localhost:8081/docs/DocID)
+* [http://localhost:8082/docs/DocID](http://localhost:8082/docs/DocID).
+
+Change `DocID` to get a different document.
+
+## Running on AWS
+
+TODO: how to specify pem files?
+
+## Unit Testing
+
+TODO: git
+
+TODO: paxos
+
+## Integration Testing
+
+To run the end to end testing suite locally, **restart** the local configuration as specified above, then in a separate shell run this:
+
+```bash
+./node_modules/.bin/phantomjs ./test/test-api.js
+```
+
+This spins up many headless browser clients which use Pad's Javascript API to concurrently edit a document.
+It should produce something like the following.
+
+    $ ./test
     Testing: serialized writes, single writer
     Testing: serialized writes, multiple writers
     Testing: concurrent, nonconflicting writers
@@ -78,5 +90,8 @@ Should produce something like the following.
     Testing: random concurrent updates...
     PASS
 
-If it fails, try increasing the timeouts before checking for consistency in each test case.
-The testing code isn't very DRY as well as requires fine tuning these timeouts by hand; but it does work, so that's cool.
+> If it fails, try increasing the timeouts which happen before checking for consistency in each test case.
+
+## Latency Testing
+
+TODO

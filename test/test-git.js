@@ -1,4 +1,4 @@
-var git = require("./js/git");
+var git = require("../js/git");
 var assert = require('assert');
 
 // TODO: test git.getDiff, git.rebase, git.applyDiff
