@@ -6,7 +6,8 @@ var async = require('async');
 // main entry point - start the go server and run the tests one by one, failing
 // immediately if any of them fail.
 function main() {
-  require("child_process").spawn("./pad", []).stdout.on('data', function() {
+  require("child_process").spawn("./pad", []);
+  setTimeout(function() {
     async.series([
       testSingleWriter,
       testSerializedMultipleWriters,
@@ -22,7 +23,7 @@ function main() {
         phantom.exit(0);
       }
     });
-  });
+  }, 1000);
 }
 
 // spawns numClients PadClient objects. calls ret(err, clients)
