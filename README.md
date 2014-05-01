@@ -40,7 +40,7 @@ npm install
 ./driver configs/local.json
 ```
 
-**NOTE: ** They are communicating with each other on the ports specified in the file.
+**NOTE:** They are communicating with each other on the ports specified in the file.
 To view the webpage, simply go to any pad server on the port **1000 higher** than the port in the config file.
 
 Then you can visit any of:
