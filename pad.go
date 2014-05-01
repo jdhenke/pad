@@ -269,7 +269,7 @@ func (ps *PadServer) Start() {
 	mux.HandleFunc("/commits/get", ps.commitGetter)
 	mux.HandleFunc("/docs/", ps.docHandler)
 	mux.Handle("/js/", http.FileServer(http.Dir("./")))
-	http.ListenAndServe(":"+ps.port, mux)
+	log.Fatal(http.ListenAndServe(":"+ps.port, mux))
 }
 
 // PAD SERVER
@@ -285,7 +285,7 @@ func MakePadServer(port string, servers []string, me int) *PadServer {
 	rpcs := rpc.NewServer()
 	rpcs.Register(ps)
 
-	ps.px = Make(servers, me, rpcs)
+	ps.px = MakePaxosInstance(servers, me, rpcs)
 
 	ps.ppd = MakePersistenceWorker(ps)
 	ps.ppd.Start()
