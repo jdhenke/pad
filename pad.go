@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
-	"paxos"
 	"strconv"
 	"sync"
 	"syscall"
@@ -28,7 +27,7 @@ type PadServer struct {
 	me         int
 	dead       bool // for testing
 	unreliable bool // for testing
-	px         *paxos.Paxos
+	px         *Paxos
 
 	docs         map[string]*Doc
 	ppd          *PadPersistenceWorker
@@ -286,7 +285,7 @@ func MakePadServer(port string, servers []string, me int) *PadServer {
 	rpcs := rpc.NewServer()
 	rpcs.Register(ps)
 
-	ps.px = paxos.Make(servers, me, rpcs)
+	ps.px = MakePaxosInstance(servers, me, rpcs)
 
 	ps.ppd = MakePersistenceWorker(ps)
 	ps.ppd.Start()

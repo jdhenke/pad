@@ -513,7 +513,8 @@ func (px *Paxos) Kill() {
 // the ports of all the paxos peers (including this one)
 // are in peers[]. this servers port is peers[me].
 //
-func Make(peers []string, me int, rpcs *rpc.Server) *Paxos {
+func MakePaxosInstance(peers []string, me int, rpcs *rpc.Server) *Paxos {
+	fmt.Println("hello! ")
 	px := &Paxos{}
 	px.peers = peers
 	px.me = me
