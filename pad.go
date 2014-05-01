@@ -269,7 +269,7 @@ func (ps *PadServer) Start() {
 	mux.HandleFunc("/commits/get", ps.commitGetter)
 	mux.HandleFunc("/docs/", ps.docHandler)
 	mux.Handle("/js/", http.FileServer(http.Dir("./")))
-	http.ListenAndServe(":"+ps.port, mux)
+	log.Fatal(http.ListenAndServe(":"+ps.port, mux))
 }
 
 // PAD SERVER

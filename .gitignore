@@ -53,3 +53,8 @@ build/Release
 node_modules
 
 .DS_Store
+
+# ignore state
+docs*
+metadata*
+
