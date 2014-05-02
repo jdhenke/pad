@@ -10,7 +10,7 @@ import (
   "io/ioutil"
 )
 
-func ExampleBasic() {
+/*func ExampleBasic() {
 
   // play with these!!! NOTE: the must have quotes in the string on each side!
   start := "\"joe henke\""
@@ -33,7 +33,7 @@ func ExampleBasic() {
   fmt.Println("\t", start)
   fmt.Println("\t", r1)
   fmt.Println("\t", r2)
-}
+}*/
 
 // these next three functions are exactly what we want
 
@@ -45,16 +45,16 @@ func getDiff(a, b string) string {
 }
 
 // returns JSON-ified rebased d2 over d1
-func rebase(d1, d2 string) string {
+func rebase(c1, c2 Commit) Commit {
   url := "/rebase"
-  body := fmt.Sprintf("{\"d1\": %v, \"d2\": %v}", d1, d2)
-  return hitNode(url, body)
+  body := fmt.Sprintf("{\"c1\": %v, \"c2\": %v}", c1, c2)
+  return Commit(hitNode(url, string(body)))
 }
 
 // returns JSON-ified application of diff to text
-func applyDiff(text, diff string) string {
+func applyDiff(text, commit string) string {
   url := "/applyDiff"
-  body := fmt.Sprintf("{\"text\":%v, \"diff\": %v}", text, diff)
+  body := fmt.Sprintf("{\"text\":%v, \"commit\": %v}", text, commit)
   return hitNode(url, body)
 }
 

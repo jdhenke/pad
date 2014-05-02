@@ -38,7 +38,7 @@ function runLocal(peer, index) {
   });
   console.log("spawning node");
   var nodeServer = spawn("node", ["git-server.js", parseInt(peer.port) - 1000]);
-  nodeServer.stderr.on("data", function(data) {
+  nodeServer.stdout.on("data", function(data) {
     console.log(data.toString().trim());
   })
 }
