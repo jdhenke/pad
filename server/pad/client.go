@@ -1,4 +1,4 @@
-package main
+package pad
 
 // illustrates how a Go program can interface with our node server to use its
 // git utility function RPCs.
@@ -10,7 +10,7 @@ import (
   "io/ioutil"
 )
 
-func main() {
+func ExampleBasic() {
 
   // play with these!!! NOTE: the must have quotes in the string on each side!
   start := "\"joe henke\""
