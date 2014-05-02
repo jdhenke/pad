@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+console.log("spinning up pad servers now...")
+
 // require necessary packages
 var fs = require("fs");
 var spawn = require("child_process").spawn
@@ -34,6 +36,11 @@ function runLocal(peer, index) {
   p.stdout.on("data", function(data) {
     console.log(data.toString().trim());
   });
+  console.log("spawning node");
+  var nodeServer = spawn("node", ["git-server.js", parseInt(peer.port) - 1000]);
+  nodeServer.stderr.on("data", function(data) {
+    console.log(data.toString().trim());
+  })
 }
 
 // servers are remote, so copy the files and run things remotely
@@ -49,5 +56,3 @@ function runRemote(peer, index) {
     console.log(data.toString().trim());
   });
 }
-
-console.log("spinning up pad servers now...")
