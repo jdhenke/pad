@@ -41,9 +41,10 @@ function getDiffHandler(data) {
 }
 
 function rebaseHandler(data) {
-  var c2Prime = {};
-  c2Prime["diff"] = git.rebase(data.c1.diff, data.c2.diff);;
-  return c2Prime;
+  var newDiff = git.rebase(data.c1.diff, data.c2.diff);
+  data.c2.diff = newDiff;
+  data.c2.parent += 1;
+  return data.c2;
 }
 
 function applyDiffHandler(data) {
