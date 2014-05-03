@@ -27,9 +27,14 @@ function commitAndPush(newText, parent) {
     parent: parent,
     diff: diff,
   };
-  function reqListener() { }
+  function reqListener() {
+    console.log("success!", this.responseText);
+  }
   var req = new XMLHttpRequest();
   req.onload = reqListener;
+  req.onerror = function() {
+    console.log("Error!", this.responseText);
+  }
   req.open("put", "/commits/put");
   req.setRequestHeader('doc-id', state.docID);
   req.send(JSON.stringify(commit));
@@ -175,7 +180,7 @@ function tryUpdateMain(data) {
       selectionStart: newSelectionStart,
       selectionEnd: newSelectionEnd,
     },
-    head: state.head,
+    head: state.head + 1,
   });
 }
 
@@ -191,7 +196,6 @@ onmessage = function(evt) {
     state.docID = data.docID;
     startContinuousPull();
   } else if (data.type == "commit") {
-
     // main is sending its current state to create a commit and send to the
     // server. this attempt could be rejected if the diff is empty, or this web
     // worker is currently updating the UI, which could lead to inconsistent

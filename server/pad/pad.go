@@ -253,7 +253,11 @@ func (ps *PadServer) get(nextCommit int, docID string) Commit {
 
 func (ps *PadServer) initHandler(w http.ResponseWriter, r *http.Request) {
 	docID := r.Header.Get("doc-id")
-	doc := ps.docs[docID]
+	doc, ok := ps.docs[docID]
+	if !ok {
+		ps.docs[docID] = ps.NewDoc(docID)
+		doc = ps.docs[docID]
+	}
 	head, text := doc.getState()
 	w.Header().Add("Content-Type", "application/json")
 	w.Header().Add("head", strconv.Itoa(head))

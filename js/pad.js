@@ -102,6 +102,7 @@ function Pad(params) {
         selectionEnd: 0,
       });
       state.head = data.head;
+      state.hasPendingCommit = false;
     }
 
   }.bind(this);

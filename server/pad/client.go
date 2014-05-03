@@ -64,7 +64,7 @@ func (ps *PadServer) hitNode(url, strBody string) string {
 	body := strings.NewReader(strBody)
 	nodePortNum, _ := strconv.Atoi(ps.port)
 	nodePortStr := strconv.Itoa(nodePortNum - 2000)
-	res, err := http.Post("http://localhost:"+nodePortStr+url, "application/json", body)
+	res, _ := http.Post("http://localhost:"+nodePortStr+url, "application/json", body)
 	rawText, _ := ioutil.ReadAll(res.Body)
 	text := string(rawText)
 	return text
