@@ -8,5 +8,5 @@ index=$5
 identity=$6
 nodePort=`expr $port - 1000`
 ssh -i $identity $user@$ip mkdir -p pad
-scp -r -i $identity configs/ index.html js/ package.json server/ $user@$ip:~/pad/
-ssh -i $identity $user@$ip "cd pad; npm install; node git-server.js $port & go run server/server.go $config $index"
+scp -r -i $identity configs/ driver git-server.js index.html js/ package.json server/ $user@$ip:~/pad/
+ssh -i $identity $user@$ip "cd pad; npm install; node git-server.js $nodePort & go run server/server.go $config $index"
