@@ -83,6 +83,7 @@ func (ppd *PadPersistenceWorker) loadAllDocs() {
 			ppd.ps.docs[doc.Name] = doc
 			docData := ppd.loadDoc(doc)
 			doc.commits = docData.Commits
+			doc.text = docData.Content
 		}
 		fmt.Println("Docs read from metaData: ", ppd.ps.docs)
 	} else {
@@ -97,19 +98,7 @@ func (ppd *PadPersistenceWorker) loadAllDocs() {
  * current state. The content is written to the document's corresponding file on disk.
  */
 func (ppd *PadPersistenceWorker) syncDoc(docName string, doc *Doc) error {
-	oldData := ppd.loadDoc(doc)
-
-	// For demonstration purposes:
-	currentContent := oldData.Content
-	if currentContent == "" {
-		currentContent = "0"
-	}
-	// fmt.Printf("CURRENT CONTENT: %s \n", currentContent)
-	temp, _ := strconv.Atoi(currentContent)
-	newContent := strconv.Itoa(temp + 1) // new doc content
-	// fmt.Printf("NEW CONTENT: %s \n", newContent)
-
-	newData := PersistentDocData{newContent, doc.commits}
+	newData := PersistentDocData{doc.text, doc.commits}
 	b, _ := json.Marshal(newData)
 
 	// TODO: get doc changes to write to disk

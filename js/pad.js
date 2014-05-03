@@ -95,6 +95,13 @@ function Pad(params) {
         success: success,
       });
 
+    } else if (data.type == "set-text") {
+      this.setState({
+        text: data.text,
+        selectionStart: 0,
+        selectionEnd: 0,
+      });
+      state.head = data.head;
     }
 
   }.bind(this);

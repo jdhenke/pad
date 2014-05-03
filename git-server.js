@@ -48,5 +48,5 @@ function rebaseHandler(data) {
 }
 
 function applyDiffHandler(data) {
-  return git.applyDiff(data.text, data.diff);
+  return git.applyDiff(data.text, data.commit.diff);
 }

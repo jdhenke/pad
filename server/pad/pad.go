@@ -43,9 +43,14 @@ type Doc struct {
 	listeners []chan Commit
 	Id        int64
 	Name      string //TODO: Make a Doc metadata structure to store doc identification
+	text      string
 }
 
 type Commit string
+
+type PartialCommit struct {
+	Parent int
+}
 
 type Err string
 
@@ -165,6 +170,7 @@ func (ps *PadServer) NewDoc(docID string) *Doc {
 	doc.listeners = make([]chan Commit, 0)
 	doc.Id = nrand()
 	doc.Name = docID
+	doc.text = "\"\""
 
 	// append document identification data to metadata
 	fd, _ := os.OpenFile(METADATA+ps.port+JSON, os.O_RDWR|os.O_APPEND, 0644)
@@ -191,14 +197,34 @@ func (doc *Doc) getCommit(id int) Commit {
 	return <-c
 }
 
-func (doc *Doc) putCommit(commit Commit) {
+func (doc *Doc) putCommit(commit Commit, ps *PadServer) {
 	doc.mu.Lock()
 	defer doc.mu.Unlock()
+
+	// TODO: REBASE COMMIT HERE
+	partialCommit := &PartialCommit{}
+	json.Unmarshal([]byte(commit), partialCommit)
+	rebaseCommit := commit
+	for i := partialCommit.Parent + 1; i < len(doc.commits); i++ {
+		rebaseCommit = ps.rebase(doc.commits[i], rebaseCommit)
+	}
+
+	doc.text = ps.applyDiff(doc.text, rebaseCommit)
+
 	for _, c := range doc.listeners {
 		c <- commit
 	}
 	doc.listeners = make([]chan Commit, 0)
-	doc.commits = append(doc.commits, commit)
+	doc.commits = append(doc.commits, rebaseCommit)
+
+}
+
+func (doc *Doc) getState() (head int, text string) {
+	doc.mu.Lock()
+	defer doc.mu.Unlock()
+	head = len(doc.commits)
+	text = doc.text
+	return
 }
 
 // HANDLERS
@@ -211,7 +237,7 @@ func (ps *PadServer) put(commit Commit, docID string) {
 		ps.docs[docID] = ps.NewDoc(docID)
 		doc = ps.docs[docID]
 	}
-	doc.putCommit(Commit(commit))
+	doc.putCommit(Commit(commit), ps)
 }
 
 func (ps *PadServer) get(nextCommit int, docID string) Commit {
@@ -223,6 +249,15 @@ func (ps *PadServer) get(nextCommit int, docID string) Commit {
 	}
 	ps.mu.Unlock()
 	return doc.getCommit(nextCommit)
+}
+
+func (ps *PadServer) initHandler(w http.ResponseWriter, r *http.Request) {
+	docID := r.Header.Get("doc-id")
+	doc := ps.docs[docID]
+	head, text := doc.getState()
+	w.Header().Add("Content-Type", "application/json")
+	w.Header().Add("head", strconv.Itoa(head))
+	w.Write([]byte(text))
 }
 
 func (ps *PadServer) commitPutter(w http.ResponseWriter, r *http.Request) {
@@ -269,6 +304,7 @@ func (ps *PadServer) Start() {
 	mux.HandleFunc("/commits/put", ps.commitPutter)
 	mux.HandleFunc("/commits/get", ps.commitGetter)
 	mux.HandleFunc("/docs/", ps.docHandler)
+	mux.HandleFunc("/init", ps.initHandler)
 	mux.Handle("/js/", http.FileServer(http.Dir("./")))
 	log.Fatal(http.ListenAndServe(":"+ps.port, mux))
 }
@@ -293,15 +329,15 @@ func MakePadServer(peers []string, me int) *PadServer {
 	ps.px = MakePaxosInstance(peers, me, rpcs)
 
 	// TODO: re-enable persistance
-	// ps.ppd = MakePersistenceWorker(ps)
-	// ps.ppd.Start()
+	ps.ppd = MakePersistenceWorker(ps)
+	ps.ppd.Start()
 
 	ps.lastExecuted = -1
 
 	ps.unreliable = false
 	ps.dead = false
 
-	l, e := net.Listen("tcp", ":" + rpcPortString)
+	l, e := net.Listen("tcp", ":"+rpcPortString)
 	if e != nil {
 		log.Fatal("listen error: ", e)
 	}

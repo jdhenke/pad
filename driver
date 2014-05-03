@@ -34,12 +34,14 @@ peers.forEach(function(peer, index) {
 function runLocal(peer, index) {
   var p = spawn("go", ["run", "server/server.go", simpleConfigPath, index]);
   p.stdout.on("data", function(data) {
-    console.log(data.toString().trim());
+    console.log("Pad Server STDOUT", data.toString().trim());
   });
-  console.log("spawning node");
+  p.stderr.on("data", function(data) {
+    console.log("Pad Server STDERR", data.toString().trim());
+  });
   var nodeServer = spawn("node", ["git-server.js", parseInt(peer.port) - 1000]);
-  nodeServer.stdout.on("data", function(data) {
-    console.log(data.toString().trim());
+  nodeServer.stderr.on("data", function(data) {
+    console.log("Node Server STDERR", data.toString().trim());
   })
 }
 

@@ -4,10 +4,11 @@ package pad
 // git utility function RPCs.
 
 import (
-  "fmt"
-  "net/http"
-  "strings"
-  "io/ioutil"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strconv"
+	"strings"
 )
 
 /*func ExampleBasic() {
@@ -38,31 +39,33 @@ import (
 // these next three functions are exactly what we want
 
 // returns JSON-ified diff
-func getDiff(a, b string) string {
-  url := "/getDiff"
-  body := fmt.Sprintf("{\"a\":%v, \"b\":%v}", a, b)
-  return hitNode(url, body)
+func (ps *PadServer) getDiff(a, b string) string {
+	url := "/getDiff"
+	body := fmt.Sprintf("{\"a\":%v, \"b\":%v}", a, b)
+	return ps.hitNode(url, body)
 }
 
 // returns JSON-ified rebased d2 over d1
-func rebase(c1, c2 Commit) Commit {
-  url := "/rebase"
-  body := fmt.Sprintf("{\"c1\": %v, \"c2\": %v}", c1, c2)
-  return Commit(hitNode(url, string(body)))
+func (ps *PadServer) rebase(c1, c2 Commit) Commit {
+	url := "/rebase"
+	body := fmt.Sprintf("{\"c1\": %v, \"c2\": %v}", c1, c2)
+	return Commit(ps.hitNode(url, string(body)))
 }
 
 // returns JSON-ified application of diff to text
-func applyDiff(text, commit string) string {
-  url := "/applyDiff"
-  body := fmt.Sprintf("{\"text\":%v, \"commit\": %v}", text, commit)
-  return hitNode(url, body)
+func (ps *PadServer) applyDiff(text string, commit Commit) string {
+	url := "/applyDiff"
+	body := fmt.Sprintf("{\"text\":%v, \"commit\": %v}", text, commit)
+	return ps.hitNode(url, body)
 }
 
 // handles http communication with the server
-func hitNode(url, strBody string) string {
-  body := strings.NewReader(strBody)
-  res, _ := http.Post("http://localhost:7000" + url, "application/json", body);
-  rawText, _ := ioutil.ReadAll(res.Body);
-  text := string(rawText)
-  return text
+func (ps *PadServer) hitNode(url, strBody string) string {
+	body := strings.NewReader(strBody)
+	nodePortNum, _ := strconv.Atoi(ps.port)
+	nodePortStr := strconv.Itoa(nodePortNum - 2000)
+	res, err := http.Post("http://localhost:"+nodePortStr+url, "application/json", body)
+	rawText, _ := ioutil.ReadAll(res.Body)
+	text := string(rawText)
+	return text
 }
