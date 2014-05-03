@@ -15,6 +15,7 @@ var state = {
   docID: null,
   paused: false,
   currentCommit: null,
+  nextDiff: 0,
 };
 
 // commits diff from headText to newText and sends it to the server.
@@ -26,10 +27,9 @@ function commitAndPush(newText, parent) {
     clientID: state.clientID,
     parent: parent,
     diff: diff,
+    id: (+ new Date()),
   };
-  function reqListener() {
-    console.log("success!", this.responseText);
-  }
+  function reqListener() { }
   var req = new XMLHttpRequest();
   req.onload = reqListener;
   req.onerror = function() {
@@ -45,8 +45,13 @@ function startContinuousPull() {
 
   function success() {
     var commit = JSON.parse(this.responseText);
-    state.pendingUpdates.push(commit);
-    tryNextUpdate();
+    if (commit.parent != state.nextDiff - 1) {
+      console.log("wonky commit received\n" + JSON.stringify(commit) + "\n" + JSON.stringify(state));
+    } else {
+      state.pendingUpdates.push(commit);
+      state.nextDiff += 1
+      tryNextUpdate();
+    }
     doPull();
   }
 
@@ -55,14 +60,19 @@ function startContinuousPull() {
     setTimeout(startContinuousPull, 1000);
   }
 
+  function cancel() {
+    console.log("request cancel encountered", this.responseText);
+    setTimeout(doPull, 1000);
+  }
+
   function doPull() {
-    var nextDiff = state.head + state.pendingUpdates.length + 1;
     var req = new XMLHttpRequest();
     req.addEventListener("load", success, true);
     req.addEventListener("error", failure, true);
+    req.addEventListener("abort", cancel, true);
     req.open("post", "/commits/get");
     req.setRequestHeader('doc-id', state.docID);
-    req.setRequestHeader('next-commit', nextDiff);
+    req.setRequestHeader('next-commit', state.nextDiff);
     req.send();
   }
 
@@ -70,6 +80,7 @@ function startContinuousPull() {
   req.addEventListener("load", function() {
     state.headText = JSON.parse(this.responseText);
     state.head = parseInt(this.getResponseHeader("head"));
+    state.nextDiff = state.head + 1;
     setMainText(state.headText);
     doPull();
   }, true);
@@ -107,6 +118,7 @@ function tryNextUpdate() {
   var commit = state.pendingUpdates.shift();
   state.currentCommit = commit;
 
+
   // now in an inconsistent state, but it's protected by isPending. headText
   // is as of head() - 1, because we've added the new commit to commits but did
   // NOT updating headText.
@@ -141,6 +153,7 @@ function tryNextUpdate() {
 function advanceHeadState() {
   var newHeadtext = applyDiff(state.headText, state.currentCommit.diff);
   state.headText = newHeadtext;
+  console.log(state.headText);
   state.head += 1;
 }
 

@@ -35,6 +35,7 @@ type PadServer struct {
 	peers        []string
 	port         string
 	lastExecuted int
+	dups         map[Commit]bool
 }
 
 type Doc struct {
@@ -117,20 +118,22 @@ func (ps *PadServer) Interpret(op Op) (Commit, Err) {
 }
 
 // Op handler and executer
-func (ps *PadServer) exec(op Op) (Commit, Err) {
-	var val Commit
-	var err Err
+func (ps *PadServer) exec(op Op) (val Commit, err Err) {
 
 	// TODO: Duplicate detection
 
 	switch op.Op {
-	case GET:
+/*	case GET:
 		args := op.Args.(GetArgs)
 		go ps.get(args.NextCommit, args.DocId)
-		break
+		break*/
 	case PUT:
 		args := op.Args.(PutArgs)
-		ps.put(args.Commit, args.DocId)
+		if _, ok := ps.dups[args.Commit]; !ok {
+			ps.dups[args.Commit] = true
+			ps.put(args.Commit, args.DocId)
+		}
+
 		break
 	}
 
@@ -205,24 +208,36 @@ func (doc *Doc) putCommit(commit Commit, ps *PadServer) {
 	partialCommit := &PartialCommit{}
 	json.Unmarshal([]byte(commit), partialCommit)
 	rebaseCommit := commit
+	if partialCommit.Parent >= len(doc.commits) {
+		fmt.Println("parent", partialCommit.Parent, "head", len(doc.commits))
+		fmt.Println("commit", commit)
+		panic("given an invalid parent pointer by client")
+	}
 	for i := partialCommit.Parent + 1; i < len(doc.commits); i++ {
 		rebaseCommit = ps.rebase(doc.commits[i], rebaseCommit)
 	}
 
+	json.Unmarshal([]byte(rebaseCommit), partialCommit)
+	if partialCommit.Parent != len(doc.commits) - 1 {
+		fmt.Println(rebaseCommit, len(doc.commits) - 1)
+		fmt.Println("commit", commit)
+		panic("a rebased commit was not rebased all the way to head");
+	}
+
 	doc.text = ps.applyDiff(doc.text, rebaseCommit)
 
+	doc.commits = append(doc.commits, rebaseCommit)
 	for _, c := range doc.listeners {
-		c <- commit
+		c <- rebaseCommit
 	}
 	doc.listeners = make([]chan Commit, 0)
-	doc.commits = append(doc.commits, rebaseCommit)
 
 }
 
 func (doc *Doc) getState() (head int, text string) {
 	doc.mu.Lock()
 	defer doc.mu.Unlock()
-	head = len(doc.commits)
+	head = len(doc.commits) - 1
 	text = doc.text
 	return
 }
@@ -346,6 +361,8 @@ func MakePadServer(peers []string, me int) *PadServer {
 		log.Fatal("listen error: ", e)
 	}
 	ps.l = l
+
+	ps.dups = make(map[Commit]bool)
 
 	// please do not change any of the following code,
 	// or do anything to subvert it.

@@ -89,6 +89,7 @@ function Pad(params) {
         evt.initEvent("pad:commit-applied")
         evt.detail = data.newState
         document.dispatchEvent(evt);
+        this.tryCommit();
       }
       worker.postMessage({
         type: "live-update-response",
