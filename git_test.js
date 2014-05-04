@@ -53,19 +53,16 @@ var testApplyDiff = function() {
 
   emptyDiff = git.getDiff("", "")
   atobDiff = git.getDiff("a", "b")
+  aatobbDiff = git.getDiff("aa", "bb")
 
-  assert.equal(git.applyDiff("a", emptyDiff), "a")
+  assert.equal(git.applyDiff("", emptyDiff), "")
   assert.equal(git.applyDiff("a", atobDiff), "b")
-  assert.equal(git.applyDiff("aa", atobDiff), "ba")
-  assert.equal(git.applyDiff("aaa", atobDiff), "baa")
-  assert.equal(git.applyDiff("c", atobDiff), "b")
-  assert.equal(git.applyDiff("cc", atobDiff), "bc")
+  assert.equal(git.applyDiff("aa", aatobbDiff), "bb")
 
   console.log("Basic tests passed")
 
   abtobaDiff = git.getDiff("ab", "ba")
-  assert.equal(git.applyDiff("aab", abtobaDiff), "aab")
-  assert.equal(git.applyDiff("abb", abtobaDiff), "bab")
+  assert.equal(git.applyDiff("ab", abtobaDiff), "ba")
 
   console.log("Secondary tests passed")
 
