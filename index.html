@@ -4,15 +4,32 @@
       body {
         text-align: center;
       }
-      #pad, button {
-        font-size: 16pt;
+      body, #pad {
+        background: black;
+      }
+      #pad, #title {
         font-family: "Monaco";
+        color: lightgray;
+      }
+      #pad {
+        font-size: 16pt;
+        height: calc(100% - 40px);
+        outline: none;
+        border: 2px solid lightgray;
+        border-radius: 7px;
+        padding: 10px;
+        width: 750px;
+        resize: none;
+      }
+      #title {
+        font-size: 20pt;
       }
     </style>
     <script type="text/javascript" src="/js/pad.js"></script>
     <script type="text/javascript" src="/js/main.js"></script>
   </head>
   <body>
-    <textarea id="pad" rows="10" cols="40"></textarea>
+    <div id="title">Pad</div>
+    <textarea id="pad" spellcheck="false"></textarea>
   </body>
 </html5>

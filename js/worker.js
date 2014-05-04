@@ -29,15 +29,18 @@ function commitAndPush(newText, parent) {
     diff: diff,
     id: (+ new Date()),
   };
-  function reqListener() { }
-  var req = new XMLHttpRequest();
-  req.onload = reqListener;
-  req.onerror = function() {
-    console.log("Error!", this.responseText);
+  function sendCommit() {
+    var req = new XMLHttpRequest();
+    req.onerror = function() {
+      console.log(this.responseText);
+      setTimeout(sendCommit, 1000);
+    }
+    req.open("put", "/commits/put");
+    req.setRequestHeader('doc-id', state.docID);
+    req.send(JSON.stringify(commit));
   }
-  req.open("put", "/commits/put");
-  req.setRequestHeader('doc-id', state.docID);
-  req.send(JSON.stringify(commit));
+
+  sendCommit();
 }
 
 // continuously tries to establish connection and apply served updates
@@ -46,7 +49,7 @@ function startContinuousPull() {
   function success() {
     var commit = JSON.parse(this.responseText);
     if (commit.parent != state.nextDiff - 1) {
-      console.log("wonky commit received\n" + JSON.stringify(commit) + "\n" + JSON.stringify(state));
+      console.log("bad commit received\n" + JSON.stringify(commit) + "\n" + JSON.stringify(state));
     } else {
       state.pendingUpdates.push(commit);
       state.nextDiff += 1
@@ -86,6 +89,7 @@ function startContinuousPull() {
   }, true);
   req.addEventListener("error", function() {
     console.log(this.responseText);
+    setTimeout(startContinuousPull, 1000);
   }, true);
   req.open("post", "/init");
   req.setRequestHeader('doc-id', state.docID);
@@ -153,7 +157,6 @@ function tryNextUpdate() {
 function advanceHeadState() {
   var newHeadtext = applyDiff(state.headText, state.currentCommit.diff);
   state.headText = newHeadtext;
-  console.log(state.headText);
   state.head += 1;
 }
 
