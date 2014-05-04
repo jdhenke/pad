@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+
+console.log("spinning up pad servers now...")
+
+// require necessary packages
+var fs = require("fs");
+var spawn = require("child_process").spawn
+
+// setup file path names
+var configPath = process.argv[2];
+var simpleConfigPath = configPath + ".txt";
+
+// load in configuration, which is just an array of peers
+var peers = require(require("path").resolve(configPath));
+
+// create a simple text file for go to use
+var simpleConfig = [];
+peers.forEach(function(peer) {
+  simpleConfig.push(peer.ip + ":" + peer.port);
+});
+var simpleConfigData = simpleConfig.join("\n");
+fs.writeFileSync(simpleConfigPath, simpleConfigData)
+
+// spin up each peer
+peers.forEach(function(peer, index) {
+  if (peer.ip == "127.0.0.1") {
+    runLocal(peer, index);
+  } else {
+    runRemote(peer, index);
+  }
+});
+
+// servers will be local, so just call go right now
+function runLocal(peer, index) {
+  var p = spawn("go", ["run", "server/server.go", simpleConfigPath, index]);
+  p.stdout.on("data", function(data) {
+    console.log("Pad Server STDOUT", data.toString().trim());
+  });
+  p.stderr.on("data", function(data) {
+    console.log("Pad Server STDERR", data.toString().trim());
+  });
+  var nodeServer = spawn("node", ["git-server.js", parseInt(peer.port) - 1000]);
+  nodeServer.stderr.on("data", function(data) {
+    console.log("Node Server STDERR", data.toString().trim());
+  })
+}
+
+// servers are remote, so copy the files and run things remotely
+function runRemote(peer, index) {
+  var args = [peer.ip,
+              peer.port,
+              peer.user,
+              simpleConfigPath,
+              index,
+              peer.identityFile];
+  var p = spawn("./run-remote.sh", args);
+  p.stdout.on("data", function(data) {
+    console.log(data.toString().trim());
+  });
+}

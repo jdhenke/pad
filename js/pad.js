@@ -43,6 +43,14 @@ function Pad(params) {
         state.head = data.head;
       }
 
+      // fire an event to indicate the pending commit has been received and
+      // ignored, which would be the time of application had the commit
+      // originated from a different client.
+      var evt = document.createEvent("HTMLEvents");
+      evt.initEvent("pad:commit-applied")
+      evt.detail = data.newState
+      document.dispatchEvent(evt);
+
       // if an attempt was made to commit while the last commit was pending i.e.
       // a user was typing, their may be changes made and if the user stops
       // typing, we still want those changes propagated. therefore, we check
@@ -76,17 +84,34 @@ function Pad(params) {
         success = true;
         state.head = data.head;
         this.setState(data.newState);
+        // fire an event to indicate a commit was applied
+        var evt = document.createEvent("HTMLEvents");
+        evt.initEvent("pad:commit-applied")
+        evt.detail = data.newState
+        document.dispatchEvent(evt);
+        this.tryCommit();
       }
       worker.postMessage({
         type: "live-update-response",
         success: success,
       });
 
+    } else if (data.type == "set-text") {
+      this.setState({
+        text: data.text,
+        selectionStart: 0,
+        selectionEnd: 0,
+      });
+      state.head = data.head;
+      state.hasPendingCommit = false;
     }
 
   }.bind(this);
 
-  // tries to commit the current state of the document
+  // tries to commit the current state of the document. uses the getState()
+  // function provided in its constructor. if a current commit is pending, this
+  // attempt aborts but as soon as the pending commit is received, it will
+  // commit the state at that time.
   this.tryCommit = function() {
     if (state.hasPendingCommit) {
       state.triedWhilePending = true;
@@ -100,6 +125,23 @@ function Pad(params) {
       parent: state.head,
     };
     worker.postMessage(liveState);
+    // fire an event to indicate that a commit was sent to the server
+    var evt = document.createEvent("HTMLEvents");
+    evt.initEvent("pad:commit-sent")
+    evt.detail = liveState;
+    document.dispatchEvent(evt);
   };
+
+  this.pause = function() {
+    worker.postMessage({
+      type: "pause",
+    });
+  }
+
+  this.play = function() {
+    worker.postMessage({
+      type: "play",
+    });
+  }
 
 }

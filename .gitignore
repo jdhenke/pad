@@ -53,3 +53,10 @@ build/Release
 node_modules
 
 .DS_Store
+
+# data
+metadata*.json
+docs*
+
+# aws passkeys
+*.pem

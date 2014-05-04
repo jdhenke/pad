@@ -1,4 +1,4 @@
-package main
+package pad
 
 import (
 	"crypto/rand"
@@ -12,8 +12,8 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
-	"paxos"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -28,13 +28,14 @@ type PadServer struct {
 	me         int
 	dead       bool // for testing
 	unreliable bool // for testing
-	px         *paxos.Paxos
+	px         *Paxos
 
 	docs         map[string]*Doc
 	ppd          *PadPersistenceWorker
 	peers        []string
 	port         string
 	lastExecuted int
+	dups         map[Commit]bool
 }
 
 type Doc struct {
@@ -43,9 +44,14 @@ type Doc struct {
 	listeners []chan Commit
 	Id        int64
 	Name      string //TODO: Make a Doc metadata structure to store doc identification
+	text      string
 }
 
 type Commit string
+
+type PartialCommit struct {
+	Parent int
+}
 
 type Err string
 
@@ -112,20 +118,22 @@ func (ps *PadServer) Interpret(op Op) (Commit, Err) {
 }
 
 // Op handler and executer
-func (ps *PadServer) exec(op Op) (Commit, Err) {
-	var val Commit
-	var err Err
+func (ps *PadServer) exec(op Op) (val Commit, err Err) {
 
 	// TODO: Duplicate detection
 
 	switch op.Op {
-	case GET:
+/*	case GET:
 		args := op.Args.(GetArgs)
 		go ps.get(args.NextCommit, args.DocId)
-		break
+		break*/
 	case PUT:
 		args := op.Args.(PutArgs)
-		ps.put(args.Commit, args.DocId)
+		if _, ok := ps.dups[args.Commit]; !ok {
+			ps.dups[args.Commit] = true
+			ps.put(args.Commit, args.DocId)
+		}
+
 		break
 	}
 
@@ -165,6 +173,7 @@ func (ps *PadServer) NewDoc(docID string) *Doc {
 	doc.listeners = make([]chan Commit, 0)
 	doc.Id = nrand()
 	doc.Name = docID
+	doc.text = "\"\""
 
 	// append document identification data to metadata
 	fd, _ := os.OpenFile(METADATA+ps.port+JSON, os.O_RDWR|os.O_APPEND, 0644)
@@ -191,14 +200,46 @@ func (doc *Doc) getCommit(id int) Commit {
 	return <-c
 }
 
-func (doc *Doc) putCommit(commit Commit) {
+func (doc *Doc) putCommit(commit Commit, ps *PadServer) {
 	doc.mu.Lock()
 	defer doc.mu.Unlock()
+
+	// TODO: REBASE COMMIT HERE
+	partialCommit := &PartialCommit{}
+	json.Unmarshal([]byte(commit), partialCommit)
+	rebaseCommit := commit
+	if partialCommit.Parent >= len(doc.commits) {
+		fmt.Println("parent", partialCommit.Parent, "head", len(doc.commits))
+		fmt.Println("commit", commit)
+		panic("given an invalid parent pointer by client")
+	}
+	for i := partialCommit.Parent + 1; i < len(doc.commits); i++ {
+		rebaseCommit = ps.rebase(doc.commits[i], rebaseCommit)
+	}
+
+	json.Unmarshal([]byte(rebaseCommit), partialCommit)
+	if partialCommit.Parent != len(doc.commits) - 1 {
+		fmt.Println(rebaseCommit, len(doc.commits) - 1)
+		fmt.Println("commit", commit)
+		panic("a rebased commit was not rebased all the way to head");
+	}
+
+	doc.text = ps.applyDiff(doc.text, rebaseCommit)
+
+	doc.commits = append(doc.commits, rebaseCommit)
 	for _, c := range doc.listeners {
-		c <- commit
+		c <- rebaseCommit
 	}
 	doc.listeners = make([]chan Commit, 0)
-	doc.commits = append(doc.commits, commit)
+
+}
+
+func (doc *Doc) getState() (head int, text string) {
+	doc.mu.Lock()
+	defer doc.mu.Unlock()
+	head = len(doc.commits) - 1
+	text = doc.text
+	return
 }
 
 // HANDLERS
@@ -211,7 +252,7 @@ func (ps *PadServer) put(commit Commit, docID string) {
 		ps.docs[docID] = ps.NewDoc(docID)
 		doc = ps.docs[docID]
 	}
-	doc.putCommit(Commit(commit))
+	doc.putCommit(Commit(commit), ps)
 }
 
 func (ps *PadServer) get(nextCommit int, docID string) Commit {
@@ -223,6 +264,19 @@ func (ps *PadServer) get(nextCommit int, docID string) Commit {
 	}
 	ps.mu.Unlock()
 	return doc.getCommit(nextCommit)
+}
+
+func (ps *PadServer) initHandler(w http.ResponseWriter, r *http.Request) {
+	docID := r.Header.Get("doc-id")
+	doc, ok := ps.docs[docID]
+	if !ok {
+		ps.docs[docID] = ps.NewDoc(docID)
+		doc = ps.docs[docID]
+	}
+	head, text := doc.getState()
+	w.Header().Add("Content-Type", "application/json")
+	w.Header().Add("head", strconv.Itoa(head))
+	w.Write([]byte(text))
 }
 
 func (ps *PadServer) commitPutter(w http.ResponseWriter, r *http.Request) {
@@ -250,7 +304,7 @@ func (ps *PadServer) docHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (ps *PadServer) kill() {
+func (ps *PadServer) Kill() {
 	DPrintf("Kill(%d): die\n", ps.me)
 	ps.dead = true
 	ps.l.Close()
@@ -269,25 +323,31 @@ func (ps *PadServer) Start() {
 	mux.HandleFunc("/commits/put", ps.commitPutter)
 	mux.HandleFunc("/commits/get", ps.commitGetter)
 	mux.HandleFunc("/docs/", ps.docHandler)
+	mux.HandleFunc("/init", ps.initHandler)
 	mux.Handle("/js/", http.FileServer(http.Dir("./")))
-	http.ListenAndServe(":"+ps.port, mux)
+	log.Fatal(http.ListenAndServe(":"+ps.port, mux))
 }
 
 // PAD SERVER
 
-func MakePadServer(port string, servers []string, me int) *PadServer {
+func MakePadServer(peers []string, me int) *PadServer {
 	ps := &PadServer{}
 	gob.Register(Op{})
 	gob.Register(Doc{})
 	gob.Register(PutArgs{})
 	gob.Register(GetArgs{})
 	ps.docs = make(map[string]*Doc)
-	ps.port = port
+	url := strings.Split(peers[me], ":")
+	ip := url[0]
+	rpcPortString := url[1]
+	rpcPort, _ := strconv.Atoi(rpcPortString)
+	ps.port = strconv.Itoa(rpcPort + 1000)
+	fmt.Printf("serving pad webpage on %v:%v\n", ip, ps.port)
 	rpcs := rpc.NewServer()
-	rpcs.Register(ps)
 
-	ps.px = paxos.Make(servers, me, rpcs)
+	ps.px = MakePaxosInstance(peers, me, rpcs)
 
+	// TODO: re-enable persistance
 	ps.ppd = MakePersistenceWorker(ps)
 	ps.ppd.Start()
 
@@ -296,12 +356,13 @@ func MakePadServer(port string, servers []string, me int) *PadServer {
 	ps.unreliable = false
 	ps.dead = false
 
-	os.Remove(servers[me])
-	l, e := net.Listen("unix", servers[me])
+	l, e := net.Listen("tcp", ":"+rpcPortString)
 	if e != nil {
 		log.Fatal("listen error: ", e)
 	}
 	ps.l = l
+
+	ps.dups = make(map[Commit]bool)
 
 	// please do not change any of the following code,
 	// or do anything to subvert it.
@@ -330,7 +391,7 @@ func MakePadServer(port string, servers []string, me int) *PadServer {
 			}
 			if err != nil && ps.dead == false {
 				fmt.Printf("Pad(%v) accept: %v\n", me, err.Error())
-				ps.kill()
+				ps.Kill()
 			}
 		}
 	}()

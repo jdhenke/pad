@@ -8,14 +8,14 @@ importScripts("/js/git.js");
 // history/current state of this document
 var state = {
   headText: "",
-  commits: [{
-    parent: null,
-    diff: [],
-  }],
+  head: 0,
   clientID: + new Date(),
   pendingUpdates: [],
   isUpdating: false,
   docID: null,
+  paused: false,
+  currentCommit: null,
+  nextDiff: 0,
 };
 
 // commits diff from headText to newText and sends it to the server.
@@ -27,10 +27,14 @@ function commitAndPush(newText, parent) {
     clientID: state.clientID,
     parent: parent,
     diff: diff,
+    id: (+ new Date()),
   };
   function reqListener() { }
   var req = new XMLHttpRequest();
   req.onload = reqListener;
+  req.onerror = function() {
+    console.log("Error!", this.responseText);
+  }
   req.open("put", "/commits/put");
   req.setRequestHeader('doc-id', state.docID);
   req.send(JSON.stringify(commit));
@@ -41,9 +45,14 @@ function startContinuousPull() {
 
   function success() {
     var commit = JSON.parse(this.responseText);
-    state.pendingUpdates.push(commit);
-    tryNextUpdate();
-    startContinuousPull();
+    if (commit.parent != state.nextDiff - 1) {
+      console.log("wonky commit received\n" + JSON.stringify(commit) + "\n" + JSON.stringify(state));
+    } else {
+      state.pendingUpdates.push(commit);
+      state.nextDiff += 1
+      tryNextUpdate();
+    }
+    doPull();
   }
 
   function failure() {
@@ -51,23 +60,54 @@ function startContinuousPull() {
     setTimeout(startContinuousPull, 1000);
   }
 
-  var nextDiff = state.commits.length + state.pendingUpdates.length;
+  function cancel() {
+    console.log("request cancel encountered", this.responseText);
+    setTimeout(doPull, 1000);
+  }
+
+  function doPull() {
+    var req = new XMLHttpRequest();
+    req.addEventListener("load", success, true);
+    req.addEventListener("error", failure, true);
+    req.addEventListener("abort", cancel, true);
+    req.open("post", "/commits/get");
+    req.setRequestHeader('doc-id', state.docID);
+    req.setRequestHeader('next-commit', state.nextDiff);
+    req.send();
+  }
+
   var req = new XMLHttpRequest();
-  req.addEventListener("load", success, true);
-  req.addEventListener("error", failure, true);
-  req.open("post", "/commits/get");
+  req.addEventListener("load", function() {
+    state.headText = JSON.parse(this.responseText);
+    state.head = parseInt(this.getResponseHeader("head"));
+    state.nextDiff = state.head + 1;
+    setMainText(state.headText);
+    doPull();
+  }, true);
+  req.addEventListener("error", function() {
+    console.log(this.responseText);
+  }, true);
+  req.open("post", "/init");
   req.setRequestHeader('doc-id', state.docID);
-  req.setRequestHeader('next-commit', nextDiff);
   req.send();
 
+}
+
+function setMainText(text) {
+  postMessage({
+    type: "set-text",
+    text: text,
+    head: state.head,
+  })
 }
 
 // if not already trying to update and queued updates from the server exist,
 // pops the next one off and ensures it is eventually pushed the UI.
 function tryNextUpdate() {
 
-  // ignore if in the middle of an update or there are no updates to apply
-  if (state.isUpdating || state.pendingUpdates.length == 0) {
+  // ignore if in the middle of an update or there are no updates to apply or
+  // this client is paused.
+  if (state.isUpdating || state.pendingUpdates.length == 0 || state.paused) {
     return;
   }
 
@@ -76,7 +116,8 @@ function tryNextUpdate() {
   // making head() dangerous to use.
   state.isUpdating = true;
   var commit = state.pendingUpdates.shift();
-  fastForward(commit);
+  state.currentCommit = commit;
+
 
   // now in an inconsistent state, but it's protected by isPending. headText
   // is as of head() - 1, because we've added the new commit to commits but did
@@ -95,7 +136,7 @@ function tryNextUpdate() {
     state.isUpdating = false;
     postMessage({
       type: "commit-received",
-      head: head(),
+      head: state.head,
     });
     tryNextUpdate();
   } else {
@@ -108,36 +149,12 @@ function tryNextUpdate() {
   }
 }
 
-// replays commit over history and adds to commits. does NOT update head state.
-function fastForward(commit) {
-  // make this diff relevant for the current HEAD
-  var newDiff = commit.diff;
-  postMessage({
-    type: "print",
-    val: "this diff" + JSON.stringify(newDiff),
-  })
-  for (var i = commit.parent + 1; i <= head(); i += 1) {
-    newDiff = rebase(state.commits[i].diff, newDiff);
-  };
-  postMessage({
-    type: "print",
-    val: "is now this diff" + JSON.stringify(newDiff),
-  })
-  var newCommit = {
-    clientID: commit.clientID,
-    parent: head(),
-    diff: newDiff,
-  };
-  state.commits.push(newCommit);
-  return newCommit;
-
-}
-
 // adjust head state to reflect the latest diff. now head() is reasonable again.
 function advanceHeadState() {
-  var diff = state.commits[state.commits.length - 1].diff;
-  var newHeadtext = applyDiff(state.headText, diff);
+  var newHeadtext = applyDiff(state.headText, state.currentCommit.diff);
   state.headText = newHeadtext;
+  console.log(state.headText);
+  state.head += 1;
 }
 
 // given data containing the latest state of the UI, rebase the changes since
@@ -159,7 +176,7 @@ function tryUpdateMain(data) {
   currentText = currentText.substring(0, selectionStart) + "\x00" +
                    currentText.substring(selectionStart, selectionEnd) +
                    "\x00" + currentText.substring(selectionEnd);
-  var newDiff = state.commits[state.commits.length - 1].diff;
+  var newDiff = state.currentCommit.diff;
   var localDiff = getDiff(state.headText, currentText);
   var newLocalDiff = rebase(newDiff, localDiff);
   var newHeadtext = applyDiff(state.headText, newDiff);
@@ -176,14 +193,9 @@ function tryUpdateMain(data) {
       selectionStart: newSelectionStart,
       selectionEnd: newSelectionEnd,
     },
-    head: head(),
+    head: state.head + 1,
   });
 }
-
-// get the index of the latest commit
-function head() {
-  return state.commits.length - 1;
-};
 
 // handle messages sent from main
 onmessage = function(evt) {
@@ -197,7 +209,6 @@ onmessage = function(evt) {
     state.docID = data.docID;
     startContinuousPull();
   } else if (data.type == "commit") {
-
     // main is sending its current state to create a commit and send to the
     // server. this attempt could be rejected if the diff is empty, or this web
     // worker is currently updating the UI, which could lead to inconsistent
@@ -207,7 +218,7 @@ onmessage = function(evt) {
     // the server and processed as the latest commit.
     if (data.text == state.headText ||
         state.isPending ||
-        data.parent != head()) {
+        data.parent != state.head) {
       postMessage({
         type: "commit-received",
       });
@@ -242,5 +253,10 @@ onmessage = function(evt) {
         type: "get-live-state",
       });
     }
+  } else if (data.type == "pause") {
+    state.paused = true;
+  } else if (data.type == "play") {
+    state.paused = false;
+    tryNextUpdate();
   }
 };
