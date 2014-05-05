@@ -66,10 +66,11 @@ Then you can visit any of:
   * [http://54.187.189.229:8081/docs/DocID](http://54.187.189.229:8081/docs/DocID)
   * [http://54.187.189.229:8082/docs/DocID](http://54.187.189.229:8082/docs/DocID)
 
-**NOTE:** The pad servers will keep going on the remote machines if you kill the local `driver`. To stop them, run the following:
+**NOTE:** The pad servers will keep going on the remote machines if you kill the local `driver`. 
+To stop them, run the driver command but append `kill`:
 
 ```bash
-./driver configs/aws.json
+./driver configs/aws.json kill
 ```
 There are two other aws configuration files in `./configs`. They require
 Evan and Marcel's identity files as well.
