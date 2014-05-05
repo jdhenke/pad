@@ -205,6 +205,7 @@ function rebase(d1, d2) {
       }
       i += 1;
     }
+    output.push(op);
     j += 1;
   }
 
