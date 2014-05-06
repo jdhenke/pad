@@ -56,6 +56,7 @@ Change `DocID` to get a different document.
 Talk w/ Joe to get his identity file and put it in `./keys`. Then run:
 
 ```bash
+chmod 400 keys/jdh-aws-box.pem
 ./driver configs/aws.json
 ```
 
@@ -65,11 +66,14 @@ Then you can visit any of:
   * [http://54.187.189.229:8081/docs/DocID](http://54.187.189.229:8081/docs/DocID)
   * [http://54.187.189.229:8082/docs/DocID](http://54.187.189.229:8082/docs/DocID)
 
-**NOTE:** The pad servers will keep going on the remote machines if you kill the local `driver`. To stop them, `ssh` in and run the following:
+**NOTE:** The pad servers will keep going on the remote machines if you kill the local `driver`. 
+To stop them, run the driver command but append `kill`:
 
 ```bash
-kill -s 9 `ps -x | grep server | grep -iv grep | awk '{print $1}' | xargs`
+./driver configs/aws.json kill
 ```
+There are two other aws configuration files in `./configs`. They require
+Evan and Marcel's identity files as well.
 
 ## Unit Testing
 
