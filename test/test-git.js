@@ -1,8 +1,6 @@
 var git = require("../js/git");
 var assert = require('assert');
 
-// TODO: test git.getDiff, git.rebase, git.applyDiff
-
 // Fast comparison of two JSON-style javascript objects
 var JSONequals = function(obj1, obj2) {
   return JSON.stringify(obj1) === JSON.stringify(obj2)
