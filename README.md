@@ -79,7 +79,9 @@ Evan and Marcel's identity files as well.
 
 ## Unit Testing
 
-TODO: git
+```bash
+node ./test/test-git.js
+```
 
 ## Integration Testing
 
