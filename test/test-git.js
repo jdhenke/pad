@@ -108,12 +108,12 @@ var testRebase = function() {
   assert.equal(runRebase("abcdef", "abcd123ef", "ab456cdef"), "ab456cd123ef");
 
   // new delete, old insert
-  
+
   // Old insert before
   assert.equal(runRebase("abc456def", "ab123c456def", "abcdef"), "ab123cdef");
   // Old insert at start
   assert.equal(runRebase("abc456def", "abc123456def", "abcdef"), "abc123def");
-  // Old insert in middle **
+  // Old insert in middle
   assert.equal(runRebase("abc456def", "abc412356def", "abcdef"), "abc356def");
   // Old insert at end
   assert.equal(runRebase("abc456def", "abc456123def", "abcdef"), "abc123def");
@@ -121,7 +121,7 @@ var testRebase = function() {
   assert.equal(runRebase("abc456def", "abc456d123ef", "abcdef"), "abcd123ef");
 
   // old delete, new insert
-  
+
   // New insert before
   assert.equal(runRebase("abc456def", "abcdef", "ab123c456def"), "ab123cdef");
   // New insert at start
@@ -145,14 +145,14 @@ var testRebase = function() {
   assert.equal(runRebase("abc123456def", "abc123def", "abcdef"), "abcdef");
   // New delete starts before and ends after **
   assert.equal(runRebase("abc124563def", "abc123def", "abcdef"), "abcdef");
-  
+
   // New delete starts at the beginning and ends in the middle
   assert.equal(runRebase("abc123456def", "abcdef", "abc456def"), "abcdef");
   // New delete starts at the beginning and ends at the end
   assert.equal(runRebase("abc123456def", "abcdef", "abcdef"), "abcdef");
   // New delete starts at the beginning and ends after **
   assert.equal(runRebase("abc123456def", "abc6def", "abcdef"), "abcdef");
-  
+
   // New delete starts & ends in the middle
   assert.equal(runRebase("abc123456def", "abcdef", "abc126def"), "abcdef");
   // New delete starts in the middle and ends at the end
