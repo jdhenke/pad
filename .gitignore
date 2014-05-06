@@ -60,3 +60,6 @@ docs*
 
 # aws passkeys
 *.pem
+
+# latency test results file
+results.csv
