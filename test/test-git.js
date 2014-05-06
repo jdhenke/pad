@@ -1,28 +1,24 @@
 var git = require("../js/git");
 var assert = require('assert');
 
-// Fast comparison of two JSON-style javascript objects
-var JSONequals = function(obj1, obj2) {
-  return JSON.stringify(obj1) === JSON.stringify(obj2)
-}
+var testGetAndApplyDiff = function() {
 
-var testGetDiff = function() {
+  console.log("********** testGetAndApplyDiff **********")
 
-  console.log("********** testGetDiff **********")
+  function makeString(length) {
+    var output = "";
+    var source = "abcdefghijklnnopqrstuwxyz";
+    for (var i = 0; i < length ; i += 1) {
+      output += source.charAt(Math.floor(Math.random() * source.length));
+    }
+    return output;
+  }
 
-  // Basic tests
-  assert(JSONequals(git.getDiff("", ""), []))
-  assert(JSONequals(git.getDiff("", "a"), [ { type:'Insert', index: 0, val: 'a' } ]))
-  assert(JSONequals(git.getDiff("a", ""), [ { type:'Delete', index: 0, size: 1 } ]))
-  assert(JSONequals(git.getDiff("a", "b"),[ { type: 'Delete', index: 0, size: 1 }, { type: 'Insert', index: 1, val: 'b' } ]))
-
-  console.log("Basic tests passed")
-
-  assert(JSONequals(git.getDiff("aba","b"), [ { type: 'Delete', index: 0, size: 1 }, { type: 'Delete', index: 2, size: 1 } ]))
-  assert(JSONequals(git.getDiff("b", "aba"), [ { type: 'Insert', index: 0, val: 'a' }, { type: 'Insert', index: 1, val: 'a' } ]))
-  assert(JSONequals(git.getDiff("bb", "aabaab"), [ { type: 'Insert', index: 0, val: 'aa' }, { type: 'Insert', index: 1, val: 'aa' } ]))
-
-  console.log("Secondary tests passed")
+  for (var i = 0; i < 100; i += 1) {
+    var a = makeString(i);
+    var b = makeString(i);
+    assert.equal(git.applyDiff(a, git.getDiff(a,b)), b);
+  }
 
   // Set up a performance benchmark
   var a = Array(101).join("a");
@@ -32,22 +28,6 @@ var testGetDiff = function() {
   for (var i = 0; i < 100; i++) {
     diff_ab.push({ type: 'Insert', index: i, val:'b'})
   }
-
-  console.time('Performance tests')
-
-  // Execute a 100-insertion getDiff 10 times
-  for (var i = 0; i < 10; i++) {
-    assert(JSONequals(git.getDiff(a, b), diff_ab))
-  }
-
-  console.timeEnd('Performance tests')
-
-  console.log("All getDiff tests passed.")
-}
-
-var testApplyDiff = function() {
-
-  console.log("********** testApplyDiff *********")
 
   var emptyDiff = git.getDiff("", "")
   var atobDiff = git.getDiff("a", "b")
@@ -69,9 +49,10 @@ var testApplyDiff = function() {
 
   console.time('Performance tests')
 
-  // Execute a 200-insertion getDiff 100 times
-  for (var i = 0; i < 100; i++) {
-    assert.equal(git.applyDiff(a, longDiff), b)
+  for (var i = 0; i < 100; i += 1) {
+    var a = makeString(i);
+    var b = makeString(i);
+    assert.equal(git.applyDiff(a, git.getDiff(a,b)), b);
   }
 
   console.timeEnd('Performance tests')
@@ -186,7 +167,6 @@ var testRebase = function() {
   var a = "adfj";
   var b = "acgj";
   assert.equal(runRebase(start, a, b), "aj");
-  console.log("problem")
   assert.equal(runRebase(start, b, a), "aj");
 
   console.log("Edge case tests passed")
@@ -195,6 +175,5 @@ var testRebase = function() {
 
 }
 
-testGetDiff();
-testApplyDiff();
+testGetAndApplyDiff();
 testRebase();
