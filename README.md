@@ -56,12 +56,7 @@ The servers coordinate to all serve the same information. Change `DocID` to get 
 Talk w/ Joe to get the identity files and put them in `./keys/`. Then run:
 
 ```bash
-<<<<<<< Updated upstream
-chmod 400 keys/jdh-aws-box.pem
-./driver configs/aws.json
-=======
 ./driver configs/aws3.json
->>>>>>> Stashed changes
 ```
 
 Then you can visit any of:
@@ -79,7 +74,9 @@ Evan and Marcel's identity files as well.
 
 ## Unit Testing
 
-TODO: git
+```bash
+node ./test/test-git.js
+```
 
 ## Integration Testing
 
