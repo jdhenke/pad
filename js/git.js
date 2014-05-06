@@ -159,14 +159,12 @@ function rebase(d1, d2) {
         }
       } else if (d2[j].type == "Delete") {
         if (d2[j].index + d2[j].size > d1[i].index + d1[i].size) {
-          // delete has mismatched overlap
-          // OLD: --[--]--
-          // NEW: ---[--]-
-          //    : --[-]-
+          // delete ends in the middle of the next new delete
           var op = d2[j];
+          op.size = d2[j].index + d2[j].size - (d1[i].index + d1[i].size);
           op.index = d1[i].index + shift;
-          op.size = d2[j].index + d2[j].size - d1[i].index + d1[i].size;
           output.push(op);
+          j -= 1; // the new delete could need to be processed more
         } else {
           // delete is completely contained, ignore.
         }
@@ -189,20 +187,30 @@ function rebase(d1, d2) {
     var op = d2[j];
     op.index += shift;
     var originalSize = op.size;
-    while (i < d1.size && d1[i].index < op.index + originalSize) {
+    while (i < d1.length && d1[i].index < op.index + originalSize) {
       if (d1[i].type == "Insert") {
         // need to increase the size to include this insert
         op.size += d1[i].val.length;
         shift += d1[i].val.length;
       } else if (d1[i].type == "Delete") {
-        // need to adjust the size to be up to
-        // NEW: --[---]--
-        // OLD: ---[-]---
-        // OLD: ---[---]-
-        var smallerRightBoundary = Math.min(op.index + originalSize,
-                                            d1[i].index + d1[i].size);
-        op.size -= smallerRightBoundary - d1[i].index;
-        shift -= d1[i].size;
+        // must account for overlap with an old delete. the old delete could be
+        // completely contained within this delete and or it could extend beyond
+        // it.
+        if (d1[i].index + d1[i].size < op.index + originalSize) {
+          // old delete is completely contained within this one
+          op.size -= d1[i].size;
+          shift -= d1[i].size;
+        } else {
+          // new delete ends inside of old delete. just end new delete at
+          // beginning of old delete since the rest of the characters will be
+          // gone due to the old delete.
+          op.size -= op.index + originalSize - d1[i].index;
+          shift -= d1[i].size;
+          doOldDelete();
+          // doOldDelete increments pointer, but so does this loop. subtract one
+          // to avoid erroneously doubling up.
+          i -= 1;
+        }
       }
       i += 1;
     }

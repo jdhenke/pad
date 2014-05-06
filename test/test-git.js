@@ -89,8 +89,13 @@ var testRebase = function() {
   var runRebase = function(original, a, b) {
     var d1 = git.getDiff(original, a);
     var d2 = git.getDiff(original, b);
+    assert.equal(git.applyDiff(original, d1), a);
+    assert.equal(git.applyDiff(original, d2), b);
     var d2Prime = git.rebase(d1, d2);
+    // only test d1 because d2 is modified in rebase
+    assert.equal(git.applyDiff(original, d1), a);
     var intermediateText = git.applyDiff(original, d1);
+    assert.equal(intermediateText, a);
     return git.applyDiff(intermediateText, d2Prime)
   }
 
@@ -114,7 +119,7 @@ var testRebase = function() {
   // Old insert at start
   assert.equal(runRebase("abc456def", "abc123456def", "abcdef"), "abc123def");
   // Old insert in middle
-  assert.equal(runRebase("abc456def", "abc412356def", "abcdef"), "abc356def");
+  assert.equal(runRebase("abc456def", "abc412356def", "abcdef"), "abcdef");
   // Old insert at end
   assert.equal(runRebase("abc456def", "abc456123def", "abcdef"), "abc123def");
   // Old insert after
