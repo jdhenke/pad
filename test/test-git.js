@@ -142,33 +142,54 @@ var testRebase = function() {
 
   // New delete starts & ends before
   assert.equal(runRebase("ab123c456def", "ab123cdef", "abc456def"), "abcdef");
-  // New delete starts before and ends @ beginning **
+  // New delete starts before and ends @ beginning
   assert.equal(runRebase("abc123456def", "abc123def", "abc56def"), "abcdef");
-  // New delete starts before and ends in the middle **
+  // New delete starts before and ends in the middle
   assert.equal(runRebase("abc123456def", "abc123def", "abc6def"), "abcdef");
-  // New delete starts before and ends at the end **
+  // New delete starts before and ends at the end
   assert.equal(runRebase("abc123456def", "abc123def", "abcdef"), "abcdef");
-  // New delete starts before and ends after **
+  // New delete starts before and ends after
   assert.equal(runRebase("abc124563def", "abc123def", "abcdef"), "abcdef");
 
   // New delete starts at the beginning and ends in the middle
   assert.equal(runRebase("abc123456def", "abcdef", "abc456def"), "abcdef");
   // New delete starts at the beginning and ends at the end
   assert.equal(runRebase("abc123456def", "abcdef", "abcdef"), "abcdef");
-  // New delete starts at the beginning and ends after **
+  // New delete starts at the beginning and ends after
   assert.equal(runRebase("abc123456def", "abc6def", "abcdef"), "abcdef");
 
   // New delete starts & ends in the middle
   assert.equal(runRebase("abc123456def", "abcdef", "abc126def"), "abcdef");
   // New delete starts in the middle and ends at the end
   assert.equal(runRebase("abc123456def", "abcdef", "abc12def"), "abcdef");
-  // New delete starts in the middle and ends after **
+  // New delete starts in the middle and ends after
   assert.equal(runRebase("abc123456def", "abc6def", "abc12def"), "abcdef");
 
-  // New delete starts at the end and ends after **
+  // New delete starts at the end and ends after
   assert.equal(runRebase("abc123456def", "abc456def", "abc12def"), "abcdef");
   // New delete starts and ends after
   assert.equal(runRebase("abc123456def", "abc3456def", "abc123def"), "abc3def");
+
+  // test when old/new deletes contain multiple opposite operations
+  var longString = "start: this is a very long string to start out with. :end";
+  var a = "start: :end";
+  var b = "start: this is a long bit of text to start out with.";
+  assert.equal(runRebase(longString, a, b), "start: ");
+  assert.equal(runRebase(longString, b, a), "start: ");
+
+  // test multiple overlapping deletes
+  var start = "abcdef";
+  var a = "adf";
+  var b = "acf";
+  assert.equal(runRebase(start, a, b), "af");
+  assert.equal(runRebase(start, b, a), "af");
+
+  var start = "acbdefghij";
+  var a = "adfj";
+  var b = "acgj";
+  assert.equal(runRebase(start, a, b), "aj");
+  console.log("problem")
+  assert.equal(runRebase(start, b, a), "aj");
 
   console.log("Edge case tests passed")
 
