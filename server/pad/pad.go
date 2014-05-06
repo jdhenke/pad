@@ -36,15 +36,25 @@ type PadServer struct {
 	port         string
 	lastExecuted int
 	dups         map[Commit]bool
+	syncCount    int
 }
 
 type Doc struct {
-	commits   []Commit
-	mu        sync.Mutex
-	listeners []chan Commit
-	Id        int64
-	Name      string //TODO: Make a Doc metadata structure to store doc identification
-	text      string
+	commits     []Commit
+	mu          sync.Mutex
+	timeLock    sync.Mutex
+	listeners   []chan Commit
+	Id          int64
+	Name        string //TODO: Make a Doc metadata structure to store doc identification
+	text        string
+	lastWritten int64
+}
+
+type DocData struct {
+	Name        string
+	Text        string
+	LastWritten int64
+	Commits     []Commit
 }
 
 type Commit string
@@ -71,11 +81,16 @@ type GetArgs struct {
 	DocId      string
 }
 
+type SyncArgs struct {
+	Docs map[string]*DocData
+}
+
 const (
 	Debug = 0
 	PUT   = "Put"
 	GET   = "Get"
 	NOOP  = "Noop"
+	SYNC  = "Sync"
 )
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
@@ -123,10 +138,10 @@ func (ps *PadServer) exec(op Op) (val Commit, err Err) {
 	// TODO: Duplicate detection
 
 	switch op.Op {
-/*	case GET:
-		args := op.Args.(GetArgs)
-		go ps.get(args.NextCommit, args.DocId)
-		break*/
+	case SYNC:
+		args := op.Args.(SyncArgs)
+		ps.syncDocs(args.Docs)
+		break
 	case PUT:
 		args := op.Args.(PutArgs)
 		if _, ok := ps.dups[args.Commit]; !ok {
@@ -218,10 +233,10 @@ func (doc *Doc) putCommit(commit Commit, ps *PadServer) {
 	}
 
 	json.Unmarshal([]byte(rebaseCommit), partialCommit)
-	if partialCommit.Parent != len(doc.commits) - 1 {
-		fmt.Println(rebaseCommit, len(doc.commits) - 1)
+	if partialCommit.Parent != len(doc.commits)-1 {
+		fmt.Println(rebaseCommit, len(doc.commits)-1)
 		fmt.Println("commit", commit)
-		panic("a rebased commit was not rebased all the way to head");
+		panic("a rebased commit was not rebased all the way to head")
 	}
 
 	doc.text = ps.applyDiff(doc.text, rebaseCommit)
@@ -243,6 +258,24 @@ func (doc *Doc) getState() (head int, text string) {
 }
 
 // HANDLERS
+
+func (ps *PadServer) syncDocs(otherDocs map[string]*DocData) {
+	for otherDocName, otherDocData := range otherDocs {
+		if _, ok := ps.docs[otherDocName]; !ok {
+			ps.docs[otherDocName] = ps.NewDoc(otherDocName)
+			ps.docs[otherDocName].text = otherDocData.Text
+			ps.docs[otherDocName].commits = otherDocData.Commits
+			ps.docs[otherDocName].lastWritten = otherDocData.LastWritten
+		} else {
+			if ps.docs[otherDocName].lastWritten < otherDocData.LastWritten {
+				ps.docs[otherDocName].text = otherDocData.Text
+				ps.docs[otherDocName].commits = otherDocData.Commits
+				ps.docs[otherDocName].lastWritten = otherDocData.LastWritten
+			}
+		}
+	}
+	ps.syncCount += 1
+}
 
 func (ps *PadServer) put(commit Commit, docID string) {
 	ps.mu.Lock()
@@ -304,6 +337,14 @@ func (ps *PadServer) docHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (ps *PadServer) createDocData() map[string]*DocData {
+	dataMap := make(map[string]*DocData)
+	for docName, doc := range ps.docs {
+		dataMap[docName] = &DocData{doc.Name, doc.text, doc.lastWritten, doc.commits}
+	}
+	return dataMap
+}
+
 func (ps *PadServer) Kill() {
 	DPrintf("Kill(%d): die\n", ps.me)
 	ps.dead = true
@@ -334,8 +375,10 @@ func MakePadServer(peers []string, me int) *PadServer {
 	ps := &PadServer{}
 	gob.Register(Op{})
 	gob.Register(Doc{})
+	gob.Register(DocData{})
 	gob.Register(PutArgs{})
 	gob.Register(GetArgs{})
+	gob.Register(SyncArgs{})
 	ps.docs = make(map[string]*Doc)
 	url := strings.Split(peers[me], ":")
 	ip := url[0]
@@ -344,15 +387,10 @@ func MakePadServer(peers []string, me int) *PadServer {
 	ps.port = strconv.Itoa(rpcPort + 1000)
 	fmt.Printf("serving pad webpage on %v:%v\n", ip, ps.port)
 	rpcs := rpc.NewServer()
-
+	ps.syncCount = 0
 	ps.px = MakePaxosInstance(peers, me, rpcs)
-
-	// TODO: re-enable persistance
 	ps.ppd = MakePersistenceWorker(ps)
-	ps.ppd.Start()
-
 	ps.lastExecuted = -1
-
 	ps.unreliable = false
 	ps.dead = false
 
@@ -364,9 +402,7 @@ func MakePadServer(peers []string, me int) *PadServer {
 
 	ps.dups = make(map[Commit]bool)
 
-	// please do not change any of the following code,
-	// or do anything to subvert it.
-
+	// for testing purposes
 	go func() {
 		for ps.dead == false {
 			conn, err := ps.l.Accept()
@@ -396,6 +432,28 @@ func MakePadServer(peers []string, me int) *PadServer {
 		}
 	}()
 
+	// Initiate sync phase to begin serving with the same universal state
+	proposal := Op{SYNC, SyncArgs{ps.createDocData()}, nrand()}
+	ps.Propose(proposal)
+	done := make(chan bool, 1)
+	go func() {
+		for ps.syncCount < len(peers) {
+			seq := ps.lastExecuted + 1
+			if done, val := ps.px.Status(seq); done {
+				ps.Interpret(val.(Op))
+			} else {
+				time.Sleep(200 * time.Millisecond)
+			}
+		}
+		done <- true
+	}()
+	// wait till we have communicated with all servers
+	<-done
+
+	// Start persistance worker instance to operate in background
+	ps.ppd.Start()
+
+	// Start go function that interprets the server's paxos log
 	go func() {
 		for {
 			seq := ps.lastExecuted + 1

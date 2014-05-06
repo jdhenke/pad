@@ -32,6 +32,7 @@ type PadPersistenceWorker struct {
 type PersistentDocData struct {
 	Content string
 	Commits []Commit
+	Time    int64
 }
 
 /*
@@ -84,6 +85,7 @@ func (ppd *PadPersistenceWorker) loadAllDocs() {
 			docData := ppd.loadDoc(doc)
 			doc.commits = docData.Commits
 			doc.text = docData.Content
+			doc.lastWritten = docData.Time
 		}
 		fmt.Println("Docs read from metaData: ", ppd.ps.docs)
 	} else {
@@ -98,13 +100,16 @@ func (ppd *PadPersistenceWorker) loadAllDocs() {
  * current state. The content is written to the document's corresponding file on disk.
  */
 func (ppd *PadPersistenceWorker) syncDoc(docName string, doc *Doc) error {
-	newData := PersistentDocData{doc.text, doc.commits}
+	doc.timeLock.Lock()
+	writeTime := time.Now().UnixNano()
+	if writeTime > doc.lastWritten {
+		doc.lastWritten = writeTime
+	}
+	newData := PersistentDocData{doc.text, doc.commits, doc.lastWritten}
 	b, _ := json.Marshal(newData)
-
-	// TODO: get doc changes to write to disk
-
-	// write whole the body
 	err := ioutil.WriteFile(ppd.pathForDoc(doc), b, 0644)
+	doc.timeLock.Unlock()
+
 	if err != nil {
 		panic(err)
 	}
