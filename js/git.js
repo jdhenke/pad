@@ -201,7 +201,7 @@ function rebase(d1, d2) {
         // OLD: ---[---]-
         var smallerRightBoundary = Math.min(op.index + originalSize,
                                             d1[i].index + d1[i].size);
-        op.size -= smallerRightBoundar - d1[i].index;
+        op.size -= smallerRightBoundary - d1[i].index;
         shift -= d1[i].size;
       }
       i += 1;
