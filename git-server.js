@@ -1,5 +1,5 @@
 // node server which provides endpoints to perform git utility function logic
-// for a client. basically, git RPC. runs on 7000 right now.
+// for a client. basically, git RPC. runs on port provided as an argument.
 
 // require necessary git logic
 var git = require('./js/git');

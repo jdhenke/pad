@@ -1,2 +1,3 @@
+# ignore all keys so our identity files are publicly available
 *
 !.gitignore

@@ -1,5 +1,11 @@
 #!/bin/sh
 
+# script which runs a pad server on an EC2 instance works by copying all files,
+# sshing into the instance and running the appropriate processes. note -
+# cancelling this local script will leave the remote processes running. this
+# will make subsequent attempts to run-remote fail until the remote processes
+# are explicitly killed using `./driver $configFile kill`.
+
 ip=$1
 port=$2
 user=$3

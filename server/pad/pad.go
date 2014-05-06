@@ -19,6 +19,22 @@ import (
 	"time"
 )
 
+// This file exports a PadServer, which should be used in the main Go script.
+//
+// To summarize the infrastructure, Pad's backend is a group of running
+// PadServers. Each PadServer communicates with each other via a paxos log to
+// apply updates to documents. Each PadServer also serves the actual frontend's
+// webpage. Go to /docs/DocID for any DocID for a document. Each pad server
+// rebases each incoming update by essentially making an RPC call to a locally
+// running node server. This is done because the client and server use the same
+// code and the client can only run javascript. Additionally, each PadServer
+// maintains a current state of the document so that new clients do not have to
+// replay the entire history of the document to become current.
+//
+// In terms of the mechanics of this code, the main entry point is Start() which
+// kicks off the appropriate handlers for serving the webpage and communicating
+// with clients.
+
 var _ = fmt.Printf
 var _ = time.Sleep
 
@@ -389,6 +405,7 @@ func MakePadServer(peers []string, me int) *PadServer {
 	rpcs := rpc.NewServer()
 	ps.syncCount = 0
 	ps.px = MakePaxosInstance(peers, me, rpcs)
+
 	ps.ppd = MakePersistenceWorker(ps)
 	ps.lastExecuted = -1
 	ps.unreliable = false

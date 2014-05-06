@@ -1,3 +1,5 @@
+# ignore everything but actual configs themselves; pad creates simplified
+# version for use by go, so we should ignore them.
 *
 !.gitignore
 !*.json

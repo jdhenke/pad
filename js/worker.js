@@ -2,10 +2,10 @@
 // off of the UI thread, so delays don't 1) slow down a live interface 2) force
 // the UI to be locked for a long time.
 
-// globally define git utility functions
+// globally define git utility functions: getDiff, rebase, applyDiff
 importScripts("/js/git.js");
 
-// history/current state of this document
+// current state of this document
 var state = {
   headText: "",
   head: 0,
@@ -18,17 +18,17 @@ var state = {
   nextDiff: 0,
 };
 
-// commits diff from headText to newText and sends it to the server.
-// parent is included because pending live updates makes the use of head()
-// inconsistent.
+// commits diff from headText to newText and sends it to the server. parent is
+// included because pending live updates makes the use of head inconsistent.
 function commitAndPush(newText, parent) {
   var diff = getDiff(state.headText, newText);
   var commit = {
     clientID: state.clientID,
     parent: parent,
     diff: diff,
-    id: (+ new Date()),
+    id: (+ new Date()), // unique ID allows server to deduplicate requests
   };
+  // create function to keep trying to commit until successful.
   function sendCommit() {
     var req = new XMLHttpRequest();
     req.onerror = function() {
@@ -39,7 +39,6 @@ function commitAndPush(newText, parent) {
     req.setRequestHeader('doc-id', state.docID);
     req.send(JSON.stringify(commit));
   }
-
   sendCommit();
 }
 
@@ -49,7 +48,9 @@ function startContinuousPull() {
   function success() {
     var commit = JSON.parse(this.responseText);
     if (commit.parent != state.nextDiff - 1) {
-      console.log("bad commit received\n" + JSON.stringify(commit) + "\n" + JSON.stringify(state));
+      console.log("bad commit received");
+      console.log(JSON.stringify(commit));
+      console.log(JSON.stringify(state));
     } else {
       state.pendingUpdates.push(commit);
       state.nextDiff += 1
@@ -79,6 +80,8 @@ function startContinuousPull() {
     req.send();
   }
 
+  // retreive the starting state from the server, then initiate process to
+  // receive all subsequent updates.
   var req = new XMLHttpRequest();
   req.addEventListener("load", function() {
     state.headText = JSON.parse(this.responseText);
@@ -97,16 +100,17 @@ function startContinuousPull() {
 
 }
 
+// tell main thread to set their text to this
 function setMainText(text) {
   postMessage({
     type: "set-text",
     text: text,
     head: state.head,
-  })
+  });
 }
 
 // if not already trying to update and queued updates from the server exist,
-// pops the next one off and ensures it is eventually pushed the UI.
+// pops the next one off and ensures it is eventually pushed to the UI.
 function tryNextUpdate() {
 
   // ignore if in the middle of an update or there are no updates to apply or
@@ -115,9 +119,9 @@ function tryNextUpdate() {
     return;
   }
 
-  // "locK" by marking isUpdating as true, get the next queued commit and rebase
+  // "lock" by marking isUpdating as true, get the next queued commit and rebase
   // it to head. note, fastForward actually adds it to the list of commits,
-  // making head() dangerous to use.
+  // making head dangerous to use.
   state.isUpdating = true;
   var commit = state.pendingUpdates.shift();
   state.currentCommit = commit;

@@ -26,7 +26,7 @@ It uses PhantomJS to simulate many clients, testing for eventual consistency amo
 
 ## Installation
 
-Make sure you have `go 1.2` and `node v0.10.3` installed.
+Make sure you have `go 1.2` and `node v0.10.3` installed. Then do the following.
 
 ```bash
 git clone https://github.com/jdhenke/pad.git
@@ -43,30 +43,32 @@ npm install
 **NOTE:** They are communicating with each other on the ports specified in the file.
 To view the webpage, simply go to any pad server on the port **1000 higher** than the port in the config file.
 
-Then you can visit any of:
+So, you can visit any of:
 
 * [http://localhost:8080/docs/DocID](http://localhost:8080/docs/DocID),
 * [http://localhost:8081/docs/DocID](http://localhost:8081/docs/DocID)
 * [http://localhost:8082/docs/DocID](http://localhost:8082/docs/DocID).
 
-Change `DocID` to get a different document.
+The servers coordinate to all serve the same information. Change `DocID` to get a different document.
 
 ## Running on AWS
 
-Talk w/ Joe to get his identity file and put it in `./keys`. Then run:
+Talk w/ Joe to get the identity files and put them in `./keys/`. Then run:
 
 ```bash
+<<<<<<< Updated upstream
 chmod 400 keys/jdh-aws-box.pem
 ./driver configs/aws.json
+=======
+./driver configs/aws3.json
+>>>>>>> Stashed changes
 ```
 
 Then you can visit any of:
 
-  * [http://54.187.189.229:8080/docs/DocID](http://54.187.189.229:8080/docs/DocID)
-  * [http://54.187.189.229:8081/docs/DocID](http://54.187.189.229:8081/docs/DocID)
-  * [http://54.187.189.229:8082/docs/DocID](http://54.187.189.229:8082/docs/DocID)
+TODO:
 
-**NOTE:** The pad servers will keep going on the remote machines if you kill the local `driver`. 
+**NOTE:** The pad servers will keep going on the remote machines if you kill the local `driver`.
 To stop them, run the driver command but append `kill`:
 
 ```bash
@@ -79,11 +81,9 @@ Evan and Marcel's identity files as well.
 
 TODO: git
 
-TODO: paxos
-
 ## Integration Testing
 
-To run the end to end testing suite locally, **restart** the local configuration as specified above, then in a separate shell run this:
+To run the end to end testing suite locally, run the local configuration as specified above, then in a separate shell run this:
 
 ```bash
 ./node_modules/.bin/phantomjs ./test/test-api.js
@@ -101,7 +101,3 @@ It should produce something like the following.
     PASS
 
 > If it fails, try increasing the timeouts which happen before checking for consistency in each test case.
-
-## Latency Testing
-
-TODO

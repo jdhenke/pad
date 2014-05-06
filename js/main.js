@@ -1,7 +1,7 @@
 window.addEventListener("load", function() {
 
   // if this is being automatically tested, let the tester initiate its own
-  // instance of the pad javascript client - don't much with things by syncing
+  // instance of the pad javascript client - don't muck with things by syncing
   // up the text area.
   if (navigator.userAgent.indexOf("PhantomJS") >= 0) {
     return;

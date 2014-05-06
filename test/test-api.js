@@ -1,4 +1,7 @@
-// end-to-end correctness testing
+// PhantomJS script for Pad Javascript Client end to end testing. Separately,
+// run the local config:  `./driver configs/local.json Then, run this script:
+// `./node_modules/.bin/phantomjs ./test/test-api.js` If any tests fails, try
+// increasing the timeouts - the commits may not have propagated yet.
 
 // helpful tool for chaining callback functions
 var async = require('async');
@@ -26,7 +29,7 @@ function main() {
   }, 2000);
 }
 
-// spawns numClients PadClient objects. calls ret(err, clients)
+// spawns numClients PadClient objects. calls ret(err, clients) when done.
 function spawnClients(numClients, ret) {
 
   // new doc ID to separate tests from eachother
@@ -66,7 +69,10 @@ function spawnClients(numClients, ret) {
   // clients will work...
   async.series(tasks, function(err, results) {
     that.clients = results;
-    ret(err, results);
+    setTimeout(function() {
+      ret(err, results); // give last client time to init state
+    }, 1000);
+
   });
 
 };
@@ -159,9 +165,9 @@ function testConcurrentNoConflicts(ret) {
 
   console.log("Testing: concurrent, nonconflicting writers");
 
-  var numClients = 10,
-      numChecks = 1, // should be <= numClients
-      pause = 10000; // requires much longer wait due to rebasing
+  var numClients = 5,
+      numChecks = 5,
+      pause = 1000; // requires much longer wait due to rebasing
 
   spawnClients(numClients, function(err, clients) {
     var doCheck = function() {
@@ -235,9 +241,9 @@ function testConcurrentConflicts(ret) {
 
   console.log("Testing: concurrent, conflicting writers");
 
-  var numClients = 10,
-      numChecks = 1, // should be <= numClients
-      pause = 10000; // requires much longer wait due to rebasing
+  var numClients = 5,
+      numChecks = 5,
+      pause = 1000; // requires much longer wait due to rebasing
 
   spawnClients(numClients, function(err, clients) {
     var doCheck = function() {
@@ -318,8 +324,8 @@ function testRandom(ret) {
   console.log("Testing: random concurrent updates...");
 
   var numClients = 5,
-      numChecks = 1, // should <= numClients
-      period = 10000, // requires much longer wait due to rebasing
+      numChecks = 5, // should <= numClients
+      period = 2000, // requires much longer wait due to rebasing
       docSize = 20;
 
   function doRound(clients, done) {
@@ -377,7 +383,7 @@ function testRandom(ret) {
 
 // class which abstracts the notion of a pad client. encapsulates the details of
 // creating a headless client, loading the page and instantiating a tester
-// Javascript Pad client object.
+// Javascript Pad client object in the page's context.
 function PadClient(url, docID, cb) {
 
   // initialize testing pad client at url and doc ID

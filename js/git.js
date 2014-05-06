@@ -75,7 +75,7 @@ function getDiff(a, b) {
   ops = ops.reverse();
 
 
-  // collapse adjacent
+  // collapse adjacent operations of the same kind.
   if (ops.length == 0) {
     return []
   }
@@ -130,14 +130,15 @@ function rebase(d1, d2) {
   var shift = 0;
 
   // possible options at each stage
+
   var doOldInsert = function() {
     shift += d1[i].val.length;
     i += 1;
   }
   var doOldDelete = function() {
-    // we want to ignore any inserts contained strictly in the bounds we
-    // also want to ignore any delets contained *strictly* in the bounds
-    // we want to modify partially overlapping deletes
+    // we want to ignore any inserts contained strictly in the bounds. we also
+    // want to ignore any deletes contained *strictly* in the bounds. we want to
+    // modify partially overlapping deletes.
     while (j < d2.length && d2[j].index < d1[i].index + d1[i].size) {
       if (d2[j].type == "Insert") {
         // ignore it. account for cursor positions marked with null char.
@@ -242,6 +243,7 @@ function rebase(d1, d2) {
   return output;
 }
 
+// export functionality if being used by node
 if (typeof module !== 'undefined') {
   module.exports = {
     getDiff: getDiff,
