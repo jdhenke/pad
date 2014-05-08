@@ -61,7 +61,7 @@ Again, change `DocID` to get a different document.
 To stop them, run the driver command with an extra `kill` option:
 
 ```bash
-./driver configs/aws.json kill
+./driver configs/aws3.json kill
 ```
 
 ## Unit Testing
