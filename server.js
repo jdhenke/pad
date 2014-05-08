@@ -9,6 +9,9 @@ var http = require("http"),
     fs   = require("fs"),
     git  = require("./js/git.js");
 
+// allow an "infinite" number of connections
+http.globalAgent.maxSockets = Infinity;
+
 // "cache" webpage contents
 var index = fs.readFileSync("index.html");
 
