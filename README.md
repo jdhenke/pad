@@ -107,11 +107,13 @@ If it fails, try increasing the timeouts - this test is not about speed and some
 
 ## Latency Testing
 
-To run latency testing, run any configuration using `driver` as specified above. Once running, separately run the following with `$configFile` as the config file used with `driver`.
+To run latency testing, run any configuration using `driver` as specified above. Once running, separately run the following.
 
 ```bash
-node ./test/test-latency.js $configFile
+node ./test/test-latency.js configs/local.json
 ```
+
+If you ran `driver` with a different config file, you may use that for latency testing as well.
 
 This should produce something like the following.
 
