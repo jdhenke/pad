@@ -51,9 +51,9 @@ Email us to get our identity files and put them in `./keys/`. Then run:
 
 Then you can visit any of:
 
-* [http://54.187.189.229:8080/docs/DocID](http://54.187.189.229:8080)
-* [http://54.186.200.121:8081/docs/DocID](http://54.186.200.121:8081)
-* [http://54.186.238.234:8082/docs/DocID](http://54.186.238.234:8082)
+* [http://54.187.189.229:8080/docs/DocID](http://54.187.189.229:8080/docs/DocID)
+* [http://54.186.200.121:8081/docs/DocID](http://54.186.200.121:8081/docs/DocID)
+* [http://54.186.238.234:8082/docs/DocID](http://54.186.238.234:8082/docs/DocID)
 
 Again, change `DocID` to get a different document.
 
