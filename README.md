@@ -16,7 +16,7 @@ Read on to learn how to use Pad.
 
 Make sure you have `go 1.2` and `node v0.10.3` installed. Then do the following.
 
-**We have only used and can verify this works with Chrome**.
+**!!! Be sure to use Google Chrome !!!**
 
 ```bash
 git clone https://github.com/jdhenke/pad.git
