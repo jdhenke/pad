@@ -43,7 +43,7 @@ Killing the driver will kill the local pad servers.
 
 ## Running on AWS
 
-Email us to get our identity files and put them in `./keys/`. Then run:
+Email us to get our identity files and put them in `./keys/`. `chmod 600 ./keys/*.pem`, then run:
 
 ```bash
 ./driver configs/aws3.json
