@@ -86,7 +86,7 @@ This should present something like the following.
 
 ## Integration Testing
 
-To run the end to end testing suite locally, run the local configuration as specified above, then in a separate shell run this:
+To run the end to end testing suite locally, **run the local configuration as specified above**, then in a separate shell run this:
 
 ```bash
 ./node_modules/.bin/phantomjs ./test/test-api.js
@@ -107,7 +107,7 @@ If it fails, try increasing the timeouts - this test is not about speed and some
 
 ## Latency Testing
 
-To run latency testing, run any configuration using `driver` as specified above. Once running, separately run the following.
+To run latency testing, **run any configuration using `driver` as specified above**. Once running, separately run the following.
 
 ```bash
 node ./test/test-latency.js configs/local.json
